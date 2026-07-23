@@ -1,0 +1,55 @@
+ROBO CASK & TAP POS - CUSTOMER ACCEPTANCE CHECKLIST
+===================================================
+Computer: ______________________   Date: ______________________
+Tested by: _____________________
+
+INSTALLATION
+[ ] ZIP was extracted completely before Setup was opened.
+[ ] SETUP_ROBO_CASK_TAP_POS.cmd opened a graphical installation wizard.
+[ ] Setup completed without an error message.
+[ ] ROBO CASK & TAP POS shortcut appeared on the Desktop.
+[ ] Application opened to the login screen.
+
+LOGIN AND USERS
+[ ] Baron logged in with baron / Baron@123.
+[ ] Baron changed the temporary password.
+[ ] Teller 1 logged in and changed the temporary password.
+[ ] Teller 2 logged in and changed the temporary password.
+[ ] Teller accounts could not open admin-only pages.
+
+PRODUCTS AND STOCK
+[ ] A bottle/can product was added with selling price, cost and stock.
+[ ] Low-stock level produced an alert when expected.
+[ ] A stock adjustment was recorded.
+[ ] A short-glass item correctly deducted ml from its mapped source stock.
+
+SALES AND RECEIPTS
+[ ] A teller opened a shift.
+[ ] A cash sale was completed.
+[ ] Stock reduced automatically.
+[ ] Change was calculated correctly.
+[ ] Receipt printed on the 80 mm thermal printer.
+[ ] Receipt showed business name, address, contacts, teller, items and totals.
+[ ] Receipt contained no QR code and no verification code.
+[ ] A receipt was reprinted from Sales & Receipts.
+[ ] Baron voided a test sale and stock was restored.
+
+REPORTS AND CONTROLS
+[ ] Dashboard totals matched the test sale.
+[ ] Expense entry reduced net profit.
+[ ] Teller shift expected cash and counted cash were compared.
+[ ] Sales CSV export downloaded correctly.
+[ ] JSON backup downloaded correctly.
+[ ] Server backup copy was created.
+
+CUSTOMER DECISION
+[ ] Accepted for business use
+[ ] Changes required before acceptance
+
+Required changes / notes:
+____________________________________________________________________________
+____________________________________________________________________________
+____________________________________________________________________________
+
+Customer signature: __________________________
+Installer signature: __________________________

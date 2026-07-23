@@ -1,0 +1,41 @@
+ROBO CASK & TAP POS 2.0.0 - BUILD TEST REPORT
+================================================
+Build date: 23 July 2026
+Package type: Windows local POS, no Python required
+
+AUTOMATED FUNCTIONAL TESTS PASSED
+---------------------------------
+[PASS] First-run state creation
+[PASS] Baron admin login using temporary password
+[PASS] Mandatory first-login password change
+[PASS] Product creation with code, price, cost and opening stock
+[PASS] Teller shift opening with opening cash
+[PASS] Product selection and cart quantity control
+[PASS] Cash sale completion
+[PASS] Receipt number generation
+[PASS] 80 mm receipt content and no verification code
+[PASS] Automatic stock deduction after sale
+[PASS] Sale appears in Sales & Receipts
+[PASS] Revenue and gross profit appear on dashboard
+[PASS] Short-glass stock mapping to an open-volume source measured in ml
+[PASS] Two 50 ml short-glass sales deducted exactly 100 ml
+[PASS] Browser console and page error checks returned no errors
+
+STATIC PACKAGE CHECKS PASSED
+----------------------------
+[PASS] JavaScript syntax validation
+[PASS] HTML/CSS files present
+[PASS] PowerShell installer/server/launcher bracket and structure checks
+[PASS] Required installation files present
+[PASS] Custom application icon present
+[PASS] Portable launcher and graphical installer included
+[PASS] No Python or Node.js dependency in the delivered package
+
+WINDOWS ACCEPTANCE TEST
+-----------------------
+The graphical setup and PowerShell local service are Windows-specific and cannot
+be executed inside the Linux build environment used to assemble this package.
+Before delivering the system to the customer, run CUSTOMER_ACCEPTANCE_CHECKLIST.txt
+on the actual Windows computer and keep the result with the project records.
+
+The tested dashboard screenshot is included as TESTED_DASHBOARD.png.

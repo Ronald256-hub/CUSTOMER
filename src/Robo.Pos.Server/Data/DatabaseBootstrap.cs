@@ -82,6 +82,10 @@ public sealed class DatabaseBootstrap
         await AuthenticationMigration.ApplyAsync(
             connection,
             cancellationToken);
+
+        await BusinessMigration.ApplyAsync(
+            connection,
+            cancellationToken);
     }
 
     public async Task<DatabaseStatus> GetStatusAsync(

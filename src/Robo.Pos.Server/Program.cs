@@ -12,6 +12,7 @@ builder.Services.AddSingleton<IPasswordHasher<PosUser>>(
 builder.Services.AddSingleton<InitialUserSeeder>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<SessionService>();
+builder.Services.AddSingleton<PasswordChangeService>();
 
 var app = builder.Build();
 
@@ -149,5 +150,6 @@ app.MapPost(
     });
 
 app.MapSessionEndpoints();
+app.MapPasswordEndpoints();
 
 app.Run();

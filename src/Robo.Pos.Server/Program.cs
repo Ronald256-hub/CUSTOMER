@@ -29,6 +29,7 @@ builder.Services.AddSingleton<InventoryService>();
 builder.Services.AddSingleton<AuditDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
 builder.Services.AddSingleton<BusinessOperationsService>();
+builder.Services.AddSingleton<SystemAdministrationService>();
 
 var app = builder.Build();
 
@@ -175,6 +176,7 @@ app.MapInventoryEndpoints();
 app.MapSalesEndpoints();
 app.MapAdminReferenceEndpoints();
 app.MapBusinessOperationsEndpoints();
+app.MapSystemAdministrationEndpoints();
 
 app.MapGet(
     "/",

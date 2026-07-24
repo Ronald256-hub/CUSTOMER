@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#321019">
+  <title>ROBO CASK & TAP POS</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="toastHost" class="toast-host"></div>
+
+  <section id="loginView" class="login-shell">
+    <div class="login-brand">
+      <div class="brand-mark">R</div>
+      <div>
+        <h1>ROBO CASK & TAP</h1>
+        <p>Sales · Stock · Teller Control</p>
+      </div>
+    </div>
+    <div class="login-card">
+      <div class="eyebrow">SECURE LOCAL LOGIN</div>
+      <h2>Welcome back</h2>
+      <p class="muted">Sign in with the account assigned by Baron.</p>
+      <form id="loginForm" autocomplete="off">
+        <label>Username<input id="loginUsername" required autofocus></label>
+        <label>Password<input id="loginPassword" type="password" required></label>
+        <button class="btn primary wide" type="submit">Sign in</button>
+      </form>
+      <div class="first-login-note">
+        <strong>First admin login</strong><br>
+        Username: <code>baron</code> &nbsp; Password: <code>Baron@123</code>
+      </div>
+    </div>
+    <div class="login-footer">Namugongo Road, near TEXOL Fuel · Kampala, Uganda</div>
+  </section>
+
+  <div id="appView" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="side-brand">
+        <div class="brand-mark small">R</div>
+        <div><strong>ROBO CASK & TAP</strong><span>Business Control</span></div>
+      </div>
+      <nav id="sideNav" class="side-nav">
+        <button data-page="dashboard" class="active"><span>▦</span> Dashboard</button>
+        <button data-page="pos"><span>▣</span> Point of Sale</button>
+        <button data-page="sales"><span>▤</span> Sales & Receipts</button>
+        <button data-page="inventory" data-admin><span>▥</span> Products & Stock</button>
+        <button data-page="expenses" data-admin><span>◫</span> Expenses</button>
+        <button data-page="reports" data-admin><span>◩</span> Reports</button>
+        <button data-page="shifts"><span>◷</span> Teller Shifts</button>
+        <button data-page="users" data-admin><span>♙</span> Users</button>
+        <button data-page="settings" data-admin><span>⚙</span> Settings & Backup</button>
+        <button data-page="audit" data-admin><span>≣</span> Audit Log</button>
+      </nav>
+      <div class="user-panel">
+        <div class="avatar" id="sideAvatar">B</div>
+        <div><strong id="sideUserName">Baron</strong><span id="sideUserRole">ADMINISTRATOR</span></div>
+        <button id="logoutBtn" title="Sign out">↪</button>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div>
+          <strong id="topBusinessName">ROBO CASK & TAP</strong>
+          <span id="topAddress">Namugongo Road, near TEXOL Fuel, Kampala, Uganda</span>
+        </div>
+        <div class="top-actions">
+          <div id="shiftPill" class="shift-pill closed">NO OPEN SHIFT</div>
+          <button id="quickPosBtn" class="btn primary">Open POS</button>
+        </div>
+      </header>
+      <div id="pageHost" class="page-host"></div>
+    </main>
+  </div>
+
+  <div id="modalBackdrop" class="modal-backdrop hidden">
+    <div id="modalBox" class="modal-box"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

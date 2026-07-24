@@ -1,0 +1,6 @@
+*.db
+*.db-shm
+*.db-wal
+src/**/.data/
+src/**/bin/
+src/**/obj/

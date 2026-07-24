@@ -1,3 +1,4 @@
+using Robo.Pos.Server.Business;
 using Robo.Pos.Server.Administration;
 using Robo.Pos.Server.Sales;
 using Robo.Pos.Server.Inventory;
@@ -27,6 +28,7 @@ builder.Services.AddSingleton<AdminTellerResetService>();
 builder.Services.AddSingleton<InventoryService>();
 builder.Services.AddSingleton<AuditDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
+builder.Services.AddSingleton<BusinessOperationsService>();
 
 var app = builder.Build();
 
@@ -172,6 +174,7 @@ app.MapAdminTellerResetEndpoints();
 app.MapInventoryEndpoints();
 app.MapSalesEndpoints();
 app.MapAdminReferenceEndpoints();
+app.MapBusinessOperationsEndpoints();
 
 app.MapGet(
     "/",

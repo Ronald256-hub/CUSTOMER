@@ -130,6 +130,7 @@ function renderNavigation() {
           ["purchases", "Purchases"],
           ["expenses", "Expenses"],
           ["reports", "Reports"],
+          ["settings", "Settings & Backup"],
           ["sales", "Sales"],
           ["receipts", "Receipts"],
           ["users", "Teller Accounts"]
@@ -171,6 +172,7 @@ async function openPage(pageName) {
     purchases: ["Purchases", "Receive stock from suppliers"],
     expenses: ["Expenses", "Record and review business costs"],
     reports: ["Reports", "Revenue, profit and teller performance"],
+    settings: ["Settings & Backup", "Business identity and protected database copies"],
     sales: ["Sales", "Complete customer transactions"],
     receipts: ["Receipts & Invoices", "Saved audit documents"],
     users: ["Teller Accounts", "Account access and recovery"]
@@ -204,6 +206,10 @@ async function openPage(pageName) {
 
     if (pageName === "reports") {
       await renderReports();
+    }
+
+    if (pageName === "settings") {
+      await renderSystemAdministration();
     }
 
     if (pageName === "sales") {

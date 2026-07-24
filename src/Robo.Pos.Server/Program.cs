@@ -11,6 +11,7 @@ builder.Services.AddSingleton<IPasswordHasher<PosUser>>(
 
 builder.Services.AddSingleton<InitialUserSeeder>();
 builder.Services.AddSingleton<AuthService>();
+builder.Services.AddSingleton<SessionService>();
 
 var app = builder.Build();
 
@@ -146,5 +147,7 @@ app.MapPost(
             },
             statusCode: StatusCodes.Status401Unauthorized);
     });
+
+app.MapSessionEndpoints();
 
 app.Run();

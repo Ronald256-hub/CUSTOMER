@@ -78,6 +78,10 @@ public sealed class DatabaseBootstrap
         """;
 
         await command.ExecuteNonQueryAsync(cancellationToken);
+
+        await AuthenticationMigration.ApplyAsync(
+            connection,
+            cancellationToken);
     }
 
     public async Task<DatabaseStatus> GetStatusAsync(

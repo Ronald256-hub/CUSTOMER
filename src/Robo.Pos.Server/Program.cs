@@ -1,10 +1,18 @@
+using Robo.Pos.Server.Administration;
 using Robo.Pos.Server.Sales;
 using Robo.Pos.Server.Inventory;
 using Robo.Pos.Server.Security;
 using Microsoft.AspNetCore.Identity;
 using Robo.Pos.Server.Data;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(
+    new WebApplicationOptions
+    {
+        Args = args,
+        WebRootPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "wwwroot")
+    });
 
 builder.Services.AddSingleton<DatabaseBootstrap>();
 
@@ -21,6 +29,9 @@ builder.Services.AddSingleton<AuditDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
 
 var app = builder.Build();
+
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 var database =
     app.Services.GetRequiredService<DatabaseBootstrap>();
@@ -56,7 +67,7 @@ app.Use(async (context, next) =>
     await next();
 });
 
-app.MapGet("/", () => Results.Ok(new
+app.MapGet("/api/v3/service", () => Results.Ok(new
 {
     application = "ROBO CASK & TAP POS",
     service = "Production Server",
@@ -160,5 +171,17 @@ app.MapPasswordEndpoints();
 app.MapAdminTellerResetEndpoints();
 app.MapInventoryEndpoints();
 app.MapSalesEndpoints();
+app.MapAdminReferenceEndpoints();
+
+app.MapGet(
+    "/",
+    (IWebHostEnvironment environment) =>
+        Results.File(
+            Path.Combine(
+                environment.WebRootPath,
+                "index.html"),
+            "text/html; charset=utf-8"));
+
+app.MapFallbackToFile("index.html");
 
 app.Run();

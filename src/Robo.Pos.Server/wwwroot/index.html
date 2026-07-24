@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  >
+  <title>ROBO CASK & TAP POS</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <section id="loginView" class="auth-view">
+    <form id="loginForm" class="auth-card">
+      <div class="logo">RC</div>
+      <h1>ROBO CASK & TAP</h1>
+      <p>Secure point-of-sale system</p>
+
+      <label>
+        Username
+        <input
+          id="loginUsername"
+          autocomplete="username"
+          required
+        >
+      </label>
+
+      <label>
+        Password
+        <input
+          id="loginPassword"
+          type="password"
+          autocomplete="current-password"
+          required
+        >
+      </label>
+
+      <button class="primary full" type="submit">
+        Sign in
+      </button>
+
+      <div id="loginError" class="error-text"></div>
+    </form>
+  </section>
+
+  <section id="passwordView" class="auth-view hidden">
+    <form id="passwordForm" class="auth-card">
+      <div class="logo">RC</div>
+      <h2>Create a private password</h2>
+      <p>
+        Replace the temporary password before using the POS.
+      </p>
+
+      <label>
+        Current password
+        <input
+          id="currentPassword"
+          type="password"
+          required
+        >
+      </label>
+
+      <label>
+        New password
+        <input
+          id="newPassword"
+          type="password"
+          minlength="12"
+          required
+        >
+      </label>
+
+      <label>
+        Confirm new password
+        <input
+          id="confirmPassword"
+          type="password"
+          minlength="12"
+          required
+        >
+      </label>
+
+      <button class="primary full" type="submit">
+        Save password
+      </button>
+
+      <div id="passwordError" class="error-text"></div>
+    </form>
+  </section>
+
+  <div id="application" class="application hidden">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo small">RC</div>
+        <div>
+          <strong>ROBO CASK & TAP</strong>
+          <span>Point of Sale</span>
+        </div>
+      </div>
+
+      <nav id="navigation"></nav>
+
+      <div class="account">
+        <strong id="userName"></strong>
+        <span id="userRole"></span>
+        <button id="logoutButton" type="button">
+          Sign out
+        </button>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div>
+          <h1 id="pageTitle">Dashboard</h1>
+          <p id="pageSubtitle"></p>
+        </div>
+
+        <div id="shiftStatus" class="pill">
+          No open shift
+        </div>
+      </header>
+
+      <div id="message" class="message hidden"></div>
+      <section id="page"></section>
+    </main>
+  </div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

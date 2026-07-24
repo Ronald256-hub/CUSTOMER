@@ -16,4 +16,11 @@
     <EmbeddedResource Include="Data/Migrations/*.sql" />
   </ItemGroup>
 
+
+  <ItemGroup>
+    <Content Update="wwwroot/**"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

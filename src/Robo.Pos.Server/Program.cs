@@ -1,8 +1,15 @@
+using Robo.Pos.Server.Security;
+using Microsoft.AspNetCore.Identity;
 using Robo.Pos.Server.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton<DatabaseBootstrap>();
+
+builder.Services.AddSingleton<IPasswordHasher<PosUser>>(
+    _ => new PasswordHasher<PosUser>());
+
+builder.Services.AddSingleton<InitialUserSeeder>();
 
 var app = builder.Build();
 
@@ -10,6 +17,11 @@ var database =
     app.Services.GetRequiredService<DatabaseBootstrap>();
 
 await database.InitializeAsync();
+
+var initialUserSeeder =
+    app.Services.GetRequiredService<InitialUserSeeder>();
+
+await initialUserSeeder.SeedAsync();
 
 app.Use(async (context, next) =>
 {

@@ -7,6 +7,10 @@ const state = {
   categories: [],
   receipts: [],
   users: [],
+  suppliers: [],
+  purchases: [],
+  expenses: [],
+  businessReport: null,
   shift: null,
   cart: new Map()
 };
@@ -122,6 +126,10 @@ function renderNavigation() {
       ? [
           ["dashboard", "Dashboard"],
           ["inventory", "Inventory"],
+          ["suppliers", "Suppliers"],
+          ["purchases", "Purchases"],
+          ["expenses", "Expenses"],
+          ["reports", "Reports"],
           ["sales", "Sales"],
           ["receipts", "Receipts"],
           ["users", "Teller Accounts"]
@@ -159,6 +167,10 @@ async function openPage(pageName) {
   const pages = {
     dashboard: ["Dashboard", "Business overview"],
     inventory: ["Inventory", "Products, prices and stock"],
+    suppliers: ["Suppliers", "Supplier contacts and status"],
+    purchases: ["Purchases", "Receive stock from suppliers"],
+    expenses: ["Expenses", "Record and review business costs"],
+    reports: ["Reports", "Revenue, profit and teller performance"],
     sales: ["Sales", "Complete customer transactions"],
     receipts: ["Receipts & Invoices", "Saved audit documents"],
     users: ["Teller Accounts", "Account access and recovery"]
@@ -176,6 +188,22 @@ async function openPage(pageName) {
 
     if (pageName === "inventory") {
       await renderInventory();
+    }
+
+    if (pageName === "suppliers") {
+      await renderSuppliers();
+    }
+
+    if (pageName === "purchases") {
+      await renderPurchases();
+    }
+
+    if (pageName === "expenses") {
+      await renderExpenses();
+    }
+
+    if (pageName === "reports") {
+      await renderReports();
     }
 
     if (pageName === "sales") {

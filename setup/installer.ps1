@@ -402,15 +402,6 @@ function Copy-SecureApplication {
         throw "The installed secure runtime could not be verified."
     }
 
-    if (
-        $script:PreviousInstall -and
-        (Test-Path $script:PreviousInstall)
-    ) {
-        Remove-Item `
-            -Path $script:PreviousInstall `
-            -Recurse `
-            -Force
-    }
 }
 
 function New-RoboShortcut {
@@ -625,13 +616,38 @@ Every user must change the temporary password after first login.
         -Encoding UTF8
 }
 
+function Complete-PreviousInstallationRemoval {
+    if (
+        $script:PreviousInstall -and
+        (Test-Path $script:PreviousInstall)
+    ) {
+        Remove-Item `
+            -Path $script:PreviousInstall `
+            -Recurse `
+            -Force
+
+        Write-SetupLog (
+            "Previous application files were removed " +
+            "after successful installation."
+        )
+
+        $script:PreviousInstall = $null
+    }
+}
+
 function Restore-PreviousInstallation {
     try {
         if (
             $script:PreviousInstall -and
-            (Test-Path $script:PreviousInstall) -and
-            -not (Test-Path $InstallPath)
+            (Test-Path $script:PreviousInstall)
         ) {
+            if (Test-Path $InstallPath) {
+                Remove-Item `
+                    -Path $InstallPath `
+                    -Recurse `
+                    -Force
+            }
+
             Move-Item `
                 -Path $script:PreviousInstall `
                 -Destination $InstallPath `
@@ -639,6 +655,19 @@ function Restore-PreviousInstallation {
 
             Write-SetupLog (
                 "Previous application files were restored."
+            )
+
+            $script:PreviousInstall = $null
+        }
+        elseif (Test-Path $InstallPath) {
+            Remove-Item `
+                -Path $InstallPath `
+                -Recurse `
+                -Force `
+                -ErrorAction SilentlyContinue
+
+            Write-SetupLog (
+                "Incomplete fresh installation files were removed."
             )
         }
     }
@@ -685,6 +714,7 @@ try {
     Copy-SecureApplication
     Register-Application
     Write-InstallationInformation
+    Complete-PreviousInstallationRemoval
 
     Write-SetupLog (
         "Installation completed successfully. " +

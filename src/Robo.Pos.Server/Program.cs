@@ -1,3 +1,4 @@
+using Robo.Pos.Server.Sales;
 using Robo.Pos.Server.Inventory;
 using Robo.Pos.Server.Security;
 using Microsoft.AspNetCore.Identity;
@@ -16,6 +17,8 @@ builder.Services.AddSingleton<SessionService>();
 builder.Services.AddSingleton<PasswordChangeService>();
 builder.Services.AddSingleton<AdminTellerResetService>();
 builder.Services.AddSingleton<InventoryService>();
+builder.Services.AddSingleton<AuditDocumentWriter>();
+builder.Services.AddSingleton<SalesService>();
 
 var app = builder.Build();
 
@@ -156,5 +159,6 @@ app.MapSessionEndpoints();
 app.MapPasswordEndpoints();
 app.MapAdminTellerResetEndpoints();
 app.MapInventoryEndpoints();
+app.MapSalesEndpoints();
 
 app.Run();

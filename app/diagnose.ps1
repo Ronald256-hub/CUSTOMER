@@ -43,6 +43,10 @@ $CredentialFile = Join-Path `
     $DataDir `
     "FIRST_LOGIN_CREDENTIALS.txt"
 
+$NetworkModeFile = Join-Path `
+    $DataDir `
+    "shop-network.enabled"
+
 $LauncherLog = Join-Path $DataDir "launcher.log"
 $ServerOutputLog = Join-Path $DataDir "server-output.log"
 $ServerErrorLog = Join-Path $DataDir "server-error.log"
@@ -273,6 +277,48 @@ if (Test-Path $BackupRoot -PathType Container) {
 
     Add-Result "Verified database backups: $($backupFiles.Count)"
     Add-Result "Unexpected backup sidecars: $($sidecarFiles.Count)"
+}
+
+Add-Result ""
+Add-Result "SHOP NETWORK"
+
+if (Test-Path $NetworkModeFile -PathType Leaf) {
+    Add-Result "Shop network mode: ENABLED"
+    Add-Result "Firewall scope: Private network / Local subnet"
+
+    try {
+        $shopAddresses = @(
+            Get-NetIPAddress `
+                -AddressFamily IPv4 `
+                -AddressState Preferred `
+                -ErrorAction Stop |
+            Where-Object {
+                $_.IPAddress -ne "127.0.0.1" -and
+                -not $_.IPAddress.StartsWith("169.254.")
+            } |
+            Select-Object `
+                -ExpandProperty IPAddress `
+                -Unique
+        )
+
+        foreach ($shopAddress in $shopAddresses) {
+            Add-Result (
+                "Possible teller address: http://" +
+                $shopAddress +
+                ":8765/"
+            )
+        }
+    }
+    catch {
+        Add-Result (
+            "Network address lookup warning: " +
+            $_.Exception.Message
+        )
+    }
+}
+else {
+    Add-Result "Shop network mode: DISABLED"
+    Add-Result "Access scope: This computer only"
 }
 
 Add-Result ""

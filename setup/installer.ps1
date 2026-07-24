@@ -203,6 +203,7 @@ function Test-SourcePackage {
     $requiredFiles = @(
         "launcher.ps1",
         "diagnose.ps1",
+        "network-setup.ps1",
         "uninstall.ps1",
         "robo.ico",
         "runtime\Robo.Pos.Server.exe",
@@ -439,6 +440,10 @@ function Register-Application {
         $InstallPath `
         "diagnose.ps1"
 
+    $networkSetupScript = Join-Path `
+        $InstallPath `
+        "network-setup.ps1"
+
     $uninstallScript = Join-Path `
         $InstallPath `
         "uninstall.ps1"
@@ -456,6 +461,18 @@ function Register-Application {
     $diagnosticArguments = (
         "-NoProfile -ExecutionPolicy Bypass " +
         "-STA -File `"$diagnosticScript`""
+    )
+
+    $enableNetworkArguments = (
+        "-NoProfile -ExecutionPolicy Bypass " +
+        "-STA -File `"$networkSetupScript`" " +
+        "-Mode Enable"
+    )
+
+    $disableNetworkArguments = (
+        "-NoProfile -ExecutionPolicy Bypass " +
+        "-STA -File `"$networkSetupScript`" " +
+        "-Mode Disable"
     )
 
     $uninstallArguments = (
@@ -496,6 +513,26 @@ function Register-Application {
         $InstallPath `
         $iconPath `
         "Run ROBO POS diagnostics"
+
+    New-RoboShortcut `
+        (Join-Path `
+            $StartMenuFolder `
+            "Enable Shop Network.lnk") `
+        $powershellPath `
+        $enableNetworkArguments `
+        $InstallPath `
+        $iconPath `
+        "Allow tellers on the private shop Wi-Fi"
+
+    New-RoboShortcut `
+        (Join-Path `
+            $StartMenuFolder `
+            "Disable Shop Network.lnk") `
+        $powershellPath `
+        $disableNetworkArguments `
+        $InstallPath `
+        $iconPath `
+        "Return the POS to this-computer-only access"
 
     New-RoboShortcut `
         (Join-Path `

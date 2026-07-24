@@ -320,6 +320,79 @@ public sealed class BusinessOperationsService
         var purchaseItems = new List<PurchaseItemResult>();
         long subtotal = 0;
 
+        // Create the parent purchase before inserting purchase_items.
+        // All operations remain inside this transaction and roll back
+        // together if any product or stock update fails.
+        await using var createPurchase =
+            connection.CreateCommand();
+
+        createPurchase.Transaction = transaction;
+
+        createPurchase.CommandText =
+        """
+        INSERT INTO purchases
+        (
+            id,
+            purchase_number,
+            supplier_id,
+            supplier_invoice_number,
+            status,
+            subtotal_minor,
+            total_minor,
+            notes,
+            received_by_user_id,
+            received_at_utc,
+            created_at_utc,
+            updated_at_utc
+        )
+        VALUES
+        (
+            $id,
+            $purchaseNumber,
+            $supplierId,
+            $supplierInvoiceNumber,
+            'received',
+            0,
+            0,
+            $notes,
+            $userId,
+            $now,
+            $now,
+            $now
+        );
+        """;
+
+        createPurchase.Parameters.AddWithValue(
+            "$id",
+            purchaseId);
+
+        createPurchase.Parameters.AddWithValue(
+            "$purchaseNumber",
+            purchaseNumber);
+
+        createPurchase.Parameters.AddWithValue(
+            "$supplierId",
+            supplierId ?? (object)DBNull.Value);
+
+        createPurchase.Parameters.AddWithValue(
+            "$supplierInvoiceNumber",
+            supplierInvoiceNumber);
+
+        createPurchase.Parameters.AddWithValue(
+            "$notes",
+            notes);
+
+        createPurchase.Parameters.AddWithValue(
+            "$userId",
+            user.Id);
+
+        createPurchase.Parameters.AddWithValue(
+            "$now",
+            now.ToString("O"));
+
+        await createPurchase.ExecuteNonQueryAsync(
+            cancellationToken);
+
         foreach (PurchaseItemRequest item in items)
         {
             ProductForPurchase product =
@@ -485,82 +558,47 @@ public sealed class BusinessOperationsService
                     expiryDate));
         }
 
-        await using var insertPurchase =
+        await using var updatePurchase =
             connection.CreateCommand();
 
-        insertPurchase.Transaction = transaction;
+        updatePurchase.Transaction = transaction;
 
-        insertPurchase.CommandText =
+        updatePurchase.CommandText =
         """
-        INSERT INTO purchases
-        (
-            id,
-            purchase_number,
-            supplier_id,
-            supplier_invoice_number,
-            status,
-            subtotal_minor,
-            total_minor,
-            notes,
-            received_by_user_id,
-            received_at_utc,
-            created_at_utc,
-            updated_at_utc
-        )
-        VALUES
-        (
-            $id,
-            $purchaseNumber,
-            $supplierId,
-            $supplierInvoiceNumber,
-            'received',
-            $subtotal,
-            $total,
-            $notes,
-            $userId,
-            $now,
-            $now,
-            $now
-        );
+        UPDATE purchases
+        SET subtotal_minor = $subtotal,
+            total_minor = $total,
+            updated_at_utc = $now
+        WHERE id = $id;
         """;
 
-        insertPurchase.Parameters.AddWithValue(
-            "$id",
-            purchaseId);
-
-        insertPurchase.Parameters.AddWithValue(
-            "$purchaseNumber",
-            purchaseNumber);
-
-        insertPurchase.Parameters.AddWithValue(
-            "$supplierId",
-            supplierId ?? (object)DBNull.Value);
-
-        insertPurchase.Parameters.AddWithValue(
-            "$supplierInvoiceNumber",
-            supplierInvoiceNumber);
-
-        insertPurchase.Parameters.AddWithValue(
+        updatePurchase.Parameters.AddWithValue(
             "$subtotal",
             subtotal);
 
-        insertPurchase.Parameters.AddWithValue(
+        updatePurchase.Parameters.AddWithValue(
             "$total",
             subtotal);
 
-        insertPurchase.Parameters.AddWithValue(
-            "$notes",
-            notes);
-
-        insertPurchase.Parameters.AddWithValue(
-            "$userId",
-            user.Id);
-
-        insertPurchase.Parameters.AddWithValue(
+        updatePurchase.Parameters.AddWithValue(
             "$now",
             now.ToString("O"));
 
-        await insertPurchase.ExecuteNonQueryAsync(cancellationToken);
+        updatePurchase.Parameters.AddWithValue(
+            "$id",
+            purchaseId);
+
+        int purchaseUpdated =
+            await updatePurchase.ExecuteNonQueryAsync(
+                cancellationToken);
+
+        if (purchaseUpdated != 1)
+        {
+            throw new BusinessOperationsException(
+                StatusCodes.Status500InternalServerError,
+                "purchase_update_failed",
+                "The purchase totals could not be saved.");
+        }
 
         await WriteAuditAsync(
             connection,

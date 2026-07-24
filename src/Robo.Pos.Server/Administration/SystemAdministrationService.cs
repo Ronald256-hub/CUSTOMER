@@ -510,6 +510,10 @@ public sealed class SystemAdministrationService
             integrityMessage =
                 "The file is not a valid readable SQLite backup.";
         }
+        finally
+        {
+            DeleteBackupSidecars(path);
+        }
 
         return new BackupVerificationResult(
             file.Name,
@@ -787,6 +791,14 @@ public sealed class SystemAdministrationService
                 "invalid_email",
                 "Enter a valid business email address.");
         }
+    }
+
+    private static void DeleteBackupSidecars(
+        string databasePath)
+    {
+        TryDelete(databasePath + "-wal");
+        TryDelete(databasePath + "-shm");
+        TryDelete(databasePath + "-journal");
     }
 
     private static void TryDelete(

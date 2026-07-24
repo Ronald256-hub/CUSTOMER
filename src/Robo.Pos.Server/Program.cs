@@ -13,6 +13,7 @@ builder.Services.AddSingleton<InitialUserSeeder>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<SessionService>();
 builder.Services.AddSingleton<PasswordChangeService>();
+builder.Services.AddSingleton<AdminTellerResetService>();
 
 var app = builder.Build();
 
@@ -151,5 +152,6 @@ app.MapPost(
 
 app.MapSessionEndpoints();
 app.MapPasswordEndpoints();
+app.MapAdminTellerResetEndpoints();
 
 app.Run();

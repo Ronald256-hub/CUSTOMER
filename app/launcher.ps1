@@ -47,6 +47,10 @@ $ServerOutputLog = Join-Path $DataDir "server-output.log"
 $ServerErrorLog = Join-Path $DataDir "server-error.log"
 $ServerPidFile = Join-Path $DataDir "server.pid"
 
+$NetworkModeFile = Join-Path `
+    $DataDir `
+    "shop-network.enabled"
+
 function Write-LaunchLog {
     param([string]$Message)
 
@@ -173,35 +177,34 @@ function New-TemporaryPassword {
     $characters =
         New-Object System.Collections.Generic.List[char]
 
+    function Get-RandomCharacter {
+        param([string]$Source)
+
+        $randomIndex = Get-CryptoRandomIndex `
+            -Maximum $Source.Length
+
+        return $Source[$randomIndex]
+    }
+
     $characters.Add(
-        $upper[
-            Get-CryptoRandomIndex $upper.Length
-        ]
+        (Get-RandomCharacter -Source $upper)
     )
 
     $characters.Add(
-        $lower[
-            Get-CryptoRandomIndex $lower.Length
-        ]
+        (Get-RandomCharacter -Source $lower)
     )
 
     $characters.Add(
-        $digits[
-            Get-CryptoRandomIndex $digits.Length
-        ]
+        (Get-RandomCharacter -Source $digits)
     )
 
     $characters.Add(
-        $symbols[
-            Get-CryptoRandomIndex $symbols.Length
-        ]
+        (Get-RandomCharacter -Source $symbols)
     )
 
     while ($characters.Count -lt 20) {
         $characters.Add(
-            $all[
-                Get-CryptoRandomIndex $all.Length
-            ]
+            (Get-RandomCharacter -Source $all)
         )
     }
 
@@ -210,8 +213,8 @@ function New-TemporaryPassword {
         $index -gt 0;
         $index--
     ) {
-        $swapIndex =
-            Get-CryptoRandomIndex ($index + 1)
+        $swapIndex = Get-CryptoRandomIndex `
+            -Maximum ($index + 1)
 
         $temporary = $characters[$index]
         $characters[$index] = $characters[$swapIndex]
@@ -417,6 +420,17 @@ this file may be deleted.
     $env:ASPNETCORE_ENVIRONMENT = "Production"
     $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
 
+    $NetworkEnabled = Test-Path `
+        $NetworkModeFile `
+        -PathType Leaf
+
+    $ListenHost = if ($NetworkEnabled) {
+        "0.0.0.0"
+    }
+    else {
+        "127.0.0.1"
+    }
+
     $Port = $null
     $ExistingServer = $false
 
@@ -455,7 +469,7 @@ this file may be deleted.
             -FilePath $ServerExe `
             -ArgumentList (
                 "--urls " +
-                "`"http://127.0.0.1:$Port`""
+                "`"http://${ListenHost}:$Port`""
             ) `
             -WorkingDirectory $RuntimeRoot `
             -WindowStyle Hidden `
@@ -505,7 +519,9 @@ this file may be deleted.
 
     Write-LaunchLog (
         "Secure application opened on $Url. " +
-        "DataDir=$DataDir"
+        "DataDir=$DataDir; " +
+        "NetworkEnabled=$NetworkEnabled; " +
+        "ListenHost=$ListenHost"
     )
 
     if ($CreatedCredentialFile) {

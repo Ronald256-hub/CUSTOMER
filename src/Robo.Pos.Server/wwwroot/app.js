@@ -125,6 +125,7 @@ function renderNavigation() {
     state.user.role === "admin"
       ? [
           ["dashboard", "Dashboard"],
+          ["owner", "Owner View"],
           ["inventory", "Inventory"],
           ["suppliers", "Suppliers"],
           ["purchases", "Purchases"],
@@ -167,6 +168,7 @@ async function openPage(pageName) {
 
   const pages = {
     dashboard: ["Dashboard", "Business overview"],
+    owner: ["Owner View", "Live stock and business performance"],
     inventory: ["Inventory", "Products, prices and stock"],
     suppliers: ["Suppliers", "Supplier contacts and status"],
     purchases: ["Purchases", "Receive stock from suppliers"],
@@ -186,6 +188,10 @@ async function openPage(pageName) {
   try {
     if (pageName === "dashboard") {
       await renderDashboard();
+    }
+
+    if (pageName === "owner") {
+      await renderOwnerDashboard();
     }
 
     if (pageName === "inventory") {

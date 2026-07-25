@@ -46,7 +46,7 @@ $UninstallRegistryKey = (
     "CurrentVersion\Uninstall\ROBOCaskTapPOS"
 )
 
-$ApplicationVersion = "3.0.0"
+$ApplicationVersion = "3.1.1"
 
 $SetupLog = Join-Path `
     $DataDir `

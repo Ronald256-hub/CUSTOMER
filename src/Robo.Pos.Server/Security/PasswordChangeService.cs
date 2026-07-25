@@ -83,6 +83,43 @@ public sealed class PasswordChangeService
                 "This account is disabled.");
         }
 
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        if (!record.MustChangePassword &&
+            record.PasswordChangedUtc is not null)
+        {
+            DateTimeOffset nextAllowedChange =
+                record.PasswordChangedUtc.Value.AddDays(30);
+
+            if (now < nextAllowedChange)
+            {
+                await WriteAuditAsync(
+                    connection,
+                    transaction,
+                    authenticatedUser,
+                    "auth.password.change.failed",
+                    false,
+                    new
+                    {
+                        reason = "change_too_soon",
+                        nextAllowedChangeUtc =
+                            nextAllowedChange.ToString("O")
+                    },
+                    cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+
+                return new PasswordChangeResult(
+                    PasswordChangeStatus.ChangeTooSoon,
+                    "change_too_soon",
+                    "This password was changed recently. " +
+                    "It may be changed again on " +
+                    nextAllowedChange.ToLocalTime()
+                        .ToString("dd MMMM yyyy") +
+                    ".");
+            }
+        }
+
         var passwordUser = new PosUser(
             authenticatedUser.Id,
             authenticatedUser.Username,
@@ -151,8 +188,6 @@ public sealed class PasswordChangeService
             _passwordHasher.HashPassword(
                 passwordUser,
                 newPassword!);
-
-        DateTimeOffset now = DateTimeOffset.UtcNow;
 
         await using var updateUser =
             connection.CreateCommand();
@@ -255,7 +290,9 @@ public sealed class PasswordChangeService
         """
         SELECT
             password_hash,
-            is_active
+            is_active,
+            must_change_password,
+            password_changed_utc
         FROM users
         WHERE id = $userId
         LIMIT 1;
@@ -275,9 +312,21 @@ public sealed class PasswordChangeService
             return null;
         }
 
+        DateTimeOffset? passwordChangedUtc = null;
+
+        if (!reader.IsDBNull(3) &&
+            DateTimeOffset.TryParse(
+                reader.GetString(3),
+                out DateTimeOffset parsedPasswordChangedUtc))
+        {
+            passwordChangedUtc = parsedPasswordChangedUtc;
+        }
+
         return new UserPasswordRecord(
             PasswordHash: reader.GetString(0),
-            IsActive: reader.GetInt32(1) == 1);
+            IsActive: reader.GetInt32(1) == 1,
+            MustChangePassword: reader.GetInt32(2) == 1,
+            PasswordChangedUtc: passwordChangedUtc);
     }
 
     private static async Task WriteAuditAsync(
@@ -352,5 +401,7 @@ public sealed class PasswordChangeService
 
     private sealed record UserPasswordRecord(
         string PasswordHash,
-        bool IsActive);
+        bool IsActive,
+        bool MustChangePassword,
+        DateTimeOffset? PasswordChangedUtc);
 }

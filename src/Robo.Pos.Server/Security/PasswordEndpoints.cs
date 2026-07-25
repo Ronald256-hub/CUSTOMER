@@ -71,6 +71,9 @@ public static class PasswordEndpoints
                     PasswordChangeStatus.SameAsCurrentPassword =>
                         StatusCodes.Status409Conflict,
 
+                    PasswordChangeStatus.ChangeTooSoon =>
+                        StatusCodes.Status409Conflict,
+
                     PasswordChangeStatus.Disabled =>
                         StatusCodes.Status403Forbidden,
 

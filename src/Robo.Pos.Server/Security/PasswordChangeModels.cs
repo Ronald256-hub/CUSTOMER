@@ -10,6 +10,7 @@ public enum PasswordChangeStatus
     InvalidCurrentPassword,
     WeakPassword,
     SameAsCurrentPassword,
+    ChangeTooSoon,
     UserNotFound,
     Disabled
 }

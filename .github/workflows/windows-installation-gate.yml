@@ -1,0 +1,107 @@
+name: Validate Windows installation engineering
+
+on:
+  pull_request:
+    paths:
+      - 'release-engineering/**'
+      - '.github/workflows/windows-installation-gate.yml'
+      - 'src/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-windows-installation:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Parse PowerShell release scripts
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem 'release-engineering' -Filter '*.ps1' -File
+          if ($files.Count -eq 0) { throw 'No release-engineering PowerShell scripts were found.' }
+
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $file.FullName,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+
+            if ($errors.Count -gt 0) {
+              $details = $errors | ForEach-Object {
+                "$($file.Name):$($_.Extent.StartLineNumber): $($_.Message)"
+              }
+              throw ($details -join "`n")
+            }
+          }
+
+          Write-Host "PowerShell syntax passed for $($files.Count) release files."
+
+      - name: Verify deployment safety rules
+        shell: pwsh
+        run: |
+          $customerInstaller = Get-Content 'release-engineering/INSTALL_NEXUS_POS.ps1' -Raw
+          if ($customerInstaller -notmatch 'published self-contained') {
+            throw 'Customer installer must document self-contained deployment.'
+          }
+          if ($customerInstaller -match 'Microsoft\.DotNet\.SDK\.10') {
+            throw 'Customer installer must not install the .NET SDK on tills.'
+          }
+
+          $prerequisites = Get-Content 'release-engineering/INSTALL_BUILD_PREREQUISITES.ps1' -Raw
+          foreach ($required in @(
+            'Microsoft.DotNet.SDK.10',
+            'JRSoftware.InnoSetup',
+            'Microsoft.WindowsSDK.10.0.28000'
+          )) {
+            if (-not $prerequisites.Contains($required)) {
+              throw "Missing prerequisite package declaration: $required"
+            }
+          }
+
+      - name: Apply known corrections to repository source
+        shell: pwsh
+        run: |
+          & 'release-engineering/APPLY_KNOWN_WINDOWS_BUILD_FIXES.ps1' -SourceRoot $PWD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Restore and build server when present
+        shell: pwsh
+        run: |
+          $server = 'src/Robo.Pos.Server/Robo.Pos.Server.csproj'
+          if (-not (Test-Path $server)) {
+            Write-Host 'Server project is not stored directly in this branch; script validation remains authoritative.'
+            exit 0
+          }
+
+          dotnet restore $server --runtime win-x64 -p:SelfContained=true -p:PublishReadyToRun=true -p:TargetLatestRuntimePatch=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build $server -c Release -r win-x64 --no-restore -p:TreatWarningsAsErrors=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Restore and build launcher when present
+        shell: pwsh
+        run: |
+          $launcher = 'src/Nexus.Pos.Launcher/Nexus.Pos.Launcher.csproj'
+          if (-not (Test-Path $launcher)) {
+            Write-Host 'Launcher project is not stored directly in this branch.'
+            exit 0
+          }
+
+          dotnet restore $launcher --runtime win-x64 -p:SelfContained=true -p:PublishSingleFile=true -p:TargetLatestRuntimePatch=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build $launcher -c Release -r win-x64 --no-restore -p:TreatWarningsAsErrors=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

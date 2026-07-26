@@ -1,0 +1,108 @@
+name: Verify Nexus POS Phase 5 source
+
+on:
+  pull_request:
+    paths:
+      - 'releases/Nexus_POS_4.5.0_Phase5_Complete_Source.zip.b64.part*'
+      - '.github/workflows/nexus-phase5-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-source:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install validation dependencies
+        shell: pwsh
+        run: python -m pip install --disable-pip-version-check beautifulsoup4 cryptography pillow pygments
+
+      - name: Reconstruct, verify and expand source package
+        shell: pwsh
+        run: |
+          $parts = Get-ChildItem 'releases/Nexus_POS_4.5.0_Phase5_Complete_Source.zip.b64.part*' | Sort-Object Name
+          if ($parts.Count -eq 0) {
+            throw 'Missing source archive parts.'
+          }
+          $builder = [System.Text.StringBuilder]::new()
+          foreach ($part in $parts) {
+            [void]$builder.Append((Get-Content -LiteralPath $part.FullName -Raw).Trim())
+          }
+          $archive = 'Nexus_POS_4.5.0_Phase5_Complete_Source.zip'
+          [System.IO.File]::WriteAllBytes($archive, [Convert]::FromBase64String($builder.ToString()))
+          $expectedLine = Get-Content 'releases/Nexus_POS_4.5.0_Phase5_SHA256.txt' -Raw
+          $expected = ($expectedLine -split '\s+')[0].Trim().ToLowerInvariant()
+          $actual = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "Source archive checksum mismatch. Expected $expected, got $actual."
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath extracted -Force
+          $root = Resolve-Path 'extracted/Nexus_POS_4.5.0_Phase5_Complete'
+          "NEXUS_SOURCE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Run source and invariant validation
+        shell: pwsh
+        working-directory: ${{ env.NEXUS_SOURCE_ROOT }}
+        run: |
+          $tests = @(
+            'tools/static_validate.py',
+            'tools/phase1_invariant_tests.py',
+            'tools/phase2_invariant_tests.py',
+            'tools/phase2_ui_tests.py',
+            'tools/phase3_invariant_tests.py',
+            'tools/phase3_ui_tests.py',
+            'tools/phase4_invariant_tests.py',
+            'tools/phase4_ui_tests.py',
+            'tools/phase5_invariant_tests.py',
+            'tools/phase5_ui_tests.py'
+          )
+          foreach ($test in $tests) {
+            python $test
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Parse all JavaScript
+        shell: pwsh
+        working-directory: ${{ env.NEXUS_SOURCE_ROOT }}
+        run: |
+          Get-ChildItem 'src/Robo.Pos.Server/wwwroot','src/Nexus.License.Service/wwwroot' -Filter '*.js' -Recurse | ForEach-Object {
+            node --check $_.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Restore .NET projects
+        shell: pwsh
+        working-directory: ${{ env.NEXUS_SOURCE_ROOT }}
+        run: |
+          dotnet restore 'src/Robo.Pos.Server/Robo.Pos.Server.csproj'
+          dotnet restore 'src/Nexus.Pos.Launcher/Nexus.Pos.Launcher.csproj'
+          dotnet restore 'src/Nexus.License.Service/Nexus.License.Service.csproj'
+
+      - name: Build .NET projects with warnings as errors
+        shell: pwsh
+        working-directory: ${{ env.NEXUS_SOURCE_ROOT }}
+        run: |
+          dotnet build 'src/Robo.Pos.Server/Robo.Pos.Server.csproj' -c Release --no-restore -p:TreatWarningsAsErrors=true
+          dotnet build 'src/Nexus.Pos.Launcher/Nexus.Pos.Launcher.csproj' -c Release --no-restore -p:TreatWarningsAsErrors=true
+          dotnet build 'src/Nexus.License.Service/Nexus.License.Service.csproj' -c Release --no-restore -p:TreatWarningsAsErrors=true

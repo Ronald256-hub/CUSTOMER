@@ -39,7 +39,8 @@ jobs:
             $builder = [System.Text.StringBuilder]::new()
             foreach ($part in $parts) {
               $text = Get-Content -LiteralPath $part.FullName -Raw
-              [void]$builder.Append(($text -replace '\s', ''))
+              $normalized = $text -replace '[^A-Za-z0-9+/=]', ''
+              [void]$builder.Append($normalized)
             }
 
             $diagnostic.base64Characters = $builder.Length

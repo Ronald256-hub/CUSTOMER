@@ -141,6 +141,8 @@ jobs:
           path: |
             windows-release-build.log
             release/smoke-diagnostics-*/**
+            src/Robo.Pos.Server/Administration/SystemAdministrationModels.cs
+            src/Robo.Pos.Server/Administration/SystemAdministrationService.cs
           if-no-files-found: warn
           retention-days: 7
 

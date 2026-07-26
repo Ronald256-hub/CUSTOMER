@@ -28,7 +28,9 @@ jobs:
             decodedBytes = 0
             expectedSha256 = $null
             actualSha256 = $null
+            failingPart = $null
             decodeError = $null
+            parts = @()
           }
 
           try {
@@ -42,9 +44,33 @@ jobs:
               foreach ($part in $parts) {
                 $text = Get-Content -LiteralPath $part.FullName -Raw
                 $normalized = $text -replace '[^A-Za-z0-9+/=]', ''
-                $bytes = [Convert]::FromBase64String($normalized)
-                $stream.Write($bytes, 0, $bytes.Length)
-                $diagnostic.decodedBytes += $bytes.Length
+                $detail = [ordered]@{
+                  name = $part.Name
+                  rawCharacters = $text.Length
+                  normalizedCharacters = $normalized.Length
+                  modulo4 = $normalized.Length % 4
+                  startsWith = if ($normalized.Length -ge 8) { $normalized.Substring(0, 8) } else { $normalized }
+                  endsWith = if ($normalized.Length -ge 8) { $normalized.Substring($normalized.Length - 8) } else { $normalized }
+                  decodedBytes = 0
+                  decoded = $false
+                  error = $null
+                }
+
+                try {
+                  $bytes = [Convert]::FromBase64String($normalized)
+                  $stream.Write($bytes, 0, $bytes.Length)
+                  $detail.decodedBytes = $bytes.Length
+                  $detail.decoded = $true
+                  $diagnostic.decodedBytes += $bytes.Length
+                }
+                catch {
+                  $detail.error = $_.Exception.Message
+                  $diagnostic.failingPart = $part.Name
+                  $diagnostic.parts += $detail
+                  throw
+                }
+
+                $diagnostic.parts += $detail
               }
             }
             finally {
@@ -60,7 +86,7 @@ jobs:
             $diagnostic.decodeError = $_.Exception.ToString()
           }
 
-          $diagnostic | ConvertTo-Json -Depth 5 | Set-Content 'phase5-delta-diagnostic.json' -Encoding UTF8
+          $diagnostic | ConvertTo-Json -Depth 8 | Set-Content 'phase5-delta-diagnostic.json' -Encoding UTF8
           Get-Content 'phase5-delta-diagnostic.json'
           "DELTA_VALID=$($diagnostic.valid.ToString().ToLowerInvariant())" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 

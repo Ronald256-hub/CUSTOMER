@@ -81,6 +81,100 @@ Get-ChildItem $sourceDirectory -Filter "*.cs" -Recurse -File |
         }
     }
 
+# Preserve customer-selected three-letter currency codes instead of forcing UGX.
+$modelsPath = Join-Path $sourceDirectory "Robo.Pos.Server\Administration\SystemAdministrationModels.cs"
+if (Test-Path -LiteralPath $modelsPath -PathType Leaf) {
+    $content = Get-Content -LiteralPath $modelsPath -Raw -Encoding UTF8
+    $original = $content
+
+    if ($content -notmatch '(?s)UpdateBusinessSettingsRequest\(.*?CurrencyCode') {
+        $content = [regex]::Replace(
+            $content,
+            'string Email,\r?\n\s*string ReceiptFooter\);',
+            "string Email,`r`n    string CurrencyCode,`r`n    string ReceiptFooter);",
+            1
+        )
+    }
+
+    if ($content -ne $original) {
+        Save-Utf8 $modelsPath $content
+        $changes.Add("Added configurable currency to $modelsPath")
+    }
+}
+
+$servicePath = Join-Path $sourceDirectory "Robo.Pos.Server\Administration\SystemAdministrationService.cs"
+if (Test-Path -LiteralPath $servicePath -PathType Leaf) {
+    $content = Get-Content -LiteralPath $servicePath -Raw -Encoding UTF8
+    $original = $content
+
+    if (-not $content.Contains("string currencyCode = NormalizeCurrencyCode(")) {
+        $content = [regex]::Replace(
+            $content,
+            '(?s)(string email = Optional\(\s*request\.Email,\s*200,\s*"Business email"\);\s*)(string receiptFooter)',
+            '$1string currencyCode = NormalizeCurrencyCode(`r`n            request.CurrencyCode);`r`n`r`n        $2',
+            1
+        )
+
+        $content = $content.Replace(
+            "currency_code = 'UGX',",
+            'currency_code = $currencyCode,'
+        )
+
+        $content = [regex]::Replace(
+            $content,
+            '(?s)(command\.Parameters\.AddWithValue\(\s*"\$email",\s*email\);\s*)(command\.Parameters\.AddWithValue\(\s*"\$receiptFooter")',
+            '$1command.Parameters.AddWithValue(`r`n            "$currencyCode",`r`n            currencyCode);`r`n`r`n        $2',
+            1
+        )
+
+        $content = [regex]::Replace(
+            $content,
+            '(?s)(new\s*\{\s*businessName,\s*address,\s*phone,\s*email,)(\s*receiptVerificationEnabled)',
+            '$1`r`n                currencyCode,$2',
+            1
+        )
+
+        $content = [regex]::Replace(
+            $content,
+            '(?s)(return new BusinessSettingsResult\(\s*businessName,\s*address,\s*phone,\s*email,\s*)"UGX",',
+            '$1currencyCode,',
+            1
+        )
+
+        $currencyMethod = @'
+    private static string NormalizeCurrencyCode(
+        string? value)
+    {
+        string currencyCode =
+            value?.Trim().ToUpperInvariant() ?? string.Empty;
+
+        if (currencyCode.Length != 3 ||
+            currencyCode.Any(character =>
+                !char.IsLetter(character)))
+        {
+            throw Error(
+                StatusCodes.Status400BadRequest,
+                "invalid_currency_code",
+                "Enter a three-letter currency code such as UGX, USD or EUR.");
+        }
+
+        return currencyCode;
+    }
+
+'@
+
+        $content = $content.Replace(
+            "    private static string Required(",
+            $currencyMethod + "    private static string Required("
+        )
+    }
+
+    if ($content -ne $original) {
+        Save-Utf8 $servicePath $content
+        $changes.Add("Made business currency configurable in $servicePath")
+    }
+}
+
 $buildScript = Join-Path $root "BUILD_WINDOWS_RELEASE.ps1"
 if (Test-Path -LiteralPath $buildScript -PathType Leaf) {
     $content = Get-Content -LiteralPath $buildScript -Raw -Encoding UTF8

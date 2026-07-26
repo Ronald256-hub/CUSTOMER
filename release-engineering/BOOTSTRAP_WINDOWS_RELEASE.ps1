@@ -19,6 +19,7 @@ $SourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path
 
 $prerequisiteScript = Join-Path $PSScriptRoot "INSTALL_BUILD_PREREQUISITES.ps1"
 $fixScript = Join-Path $PSScriptRoot "APPLY_KNOWN_WINDOWS_BUILD_FIXES.ps1"
+$accountingFixScript = Join-Path $PSScriptRoot "APPLY_ACCOUNTING_SETTINGS_FIXES.ps1"
 $buildScript = Join-Path $SourceRoot "BUILD_WINDOWS_RELEASE.ps1"
 
 function Test-DotNet10Sdk {
@@ -109,14 +110,22 @@ if (-not [string]::IsNullOrWhiteSpace($CertificateThumbprint) -and
     throw "SignTool is unavailable after prerequisite installation."
 }
 
-if (-not (Test-Path -LiteralPath $fixScript -PathType Leaf)) {
-    throw "Known-fix script was not found: $fixScript"
+foreach ($requiredPatch in @($fixScript, $accountingFixScript)) {
+    if (-not (Test-Path -LiteralPath $requiredPatch -PathType Leaf)) {
+        throw "Required source correction script was not found: $requiredPatch"
+    }
 }
 
 & powershell.exe -NoProfile -ExecutionPolicy Bypass `
     -File $fixScript -SourceRoot $SourceRoot
 if ($LASTEXITCODE -ne 0) {
     throw "Verified source/build corrections failed."
+}
+
+& powershell.exe -NoProfile -ExecutionPolicy Bypass `
+    -File $accountingFixScript -SourceRoot $SourceRoot
+if ($LASTEXITCODE -ne 0) {
+    throw "Accounting settings corrections failed."
 }
 
 if (-not (Test-Path -LiteralPath $buildScript -PathType Leaf)) {

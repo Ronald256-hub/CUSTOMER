@@ -17,14 +17,46 @@ foreach ($path in @($servicePath, $modelsPath)) {
     }
 }
 
-$models = Get-Content -LiteralPath $modelsPath -Raw -Encoding UTF8
-if ($models -notmatch '(?s)UpdateBusinessSettingsRequest\(.*?CurrencyCode') {
-    $models = [regex]::Replace(
-        $models,
-        'string Email,\r?\n\s*string ReceiptFooter\);',
-        "string Email,`r`n    string CurrencyCode,`r`n    string ReceiptFooter);",
-        1
+function Replace-RequiredText {
+    param(
+        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][string]$OldText,
+        [Parameter(Mandatory)][string]$NewText,
+        [Parameter(Mandatory)][string]$Description
     )
+
+    if ($Text.Contains($NewText)) {
+        Write-Host "$Description is already applied." -ForegroundColor Yellow
+        return $Text
+    }
+
+    if (-not $Text.Contains($OldText)) {
+        throw "Could not locate the source section for: $Description"
+    }
+
+    Write-Host "Applying: $Description" -ForegroundColor Cyan
+    return $Text.Replace($OldText, $NewText)
+}
+
+$models = Get-Content -LiteralPath $modelsPath -Raw -Encoding UTF8
+$oldModel = @'
+    string Phone,
+    string Email,
+    string ReceiptFooter);
+'@
+$newModel = @'
+    string Phone,
+    string Email,
+    string CurrencyCode,
+    string ReceiptFooter);
+'@
+
+if (-not $models.Contains("string CurrencyCode,")) {
+    $models = Replace-RequiredText `
+        -Text $models `
+        -OldText $oldModel `
+        -NewText $newModel `
+        -Description "business settings currency request"
     [System.IO.File]::WriteAllText($modelsPath, $models, $utf8)
 }
 
@@ -34,84 +66,99 @@ if ($content.Contains("string currencyCode = NormalizeCurrencyCode(")) {
     exit 0
 }
 
-$declarationPattern = [regex]::new(
-    '(?s)(string email = Optional\(\s*request\.Email,\s*200,\s*"Business email"\);\s*)(string receiptFooter)')
-if (-not $declarationPattern.IsMatch($content)) {
-    throw "Could not locate the business email/receipt settings section."
-}
-$content = $declarationPattern.Replace(
-    $content,
-    {
-        param($match)
-        return $match.Groups[1].Value +
-            "string currencyCode = NormalizeCurrencyCode(`r`n" +
-            "            request.CurrencyCode);`r`n`r`n        " +
-            $match.Groups[2].Value
-    },
-    1
-)
+$oldDeclaration = @'
+        string email = Optional(
+            request.Email,
+            200,
+            "Business email");
 
-if (-not $content.Contains("currency_code = 'UGX',")) {
-    throw "Could not locate the hard-coded UGX update assignment."
-}
-$content = $content.Replace(
-    "currency_code = 'UGX',",
-    'currency_code = $currencyCode,'
-)
+        string receiptFooter = Required(
+'@
+$newDeclaration = @'
+        string email = Optional(
+            request.Email,
+            200,
+            "Business email");
 
-$parameterPattern = [regex]::new(
-    '(?s)(command\.Parameters\.AddWithValue\(\s*"\$email",\s*email\);\s*)(command\.Parameters\.AddWithValue\(\s*"\$receiptFooter")')
-if (-not $parameterPattern.IsMatch($content)) {
-    throw "Could not locate the business email SQL parameter section."
-}
-$content = $parameterPattern.Replace(
-    $content,
-    {
-        param($match)
-        return $match.Groups[1].Value +
-            "command.Parameters.AddWithValue(`r`n" +
-            "            `"`$currencyCode`",`r`n" +
-            "            currencyCode);`r`n`r`n        " +
-            $match.Groups[2].Value
-    },
-    1
-)
+        string currencyCode = NormalizeCurrencyCode(
+            request.CurrencyCode);
 
-$auditPattern = [regex]::new(
-    '(?s)(new\s*\{\s*businessName,\s*address,\s*phone,\s*email,)(\s*receiptVerificationEnabled)')
-if (-not $auditPattern.IsMatch($content)) {
-    throw "Could not locate the settings audit payload."
-}
-$content = $auditPattern.Replace(
-    $content,
-    {
-        param($match)
-        return $match.Groups[1].Value +
-            "`r`n                currencyCode," +
-            $match.Groups[2].Value
-    },
-    1
-)
+        string receiptFooter = Required(
+'@
+$content = Replace-RequiredText `
+    -Text $content `
+    -OldText $oldDeclaration `
+    -NewText $newDeclaration `
+    -Description "currency validation"
 
-$returnPattern = [regex]::new(
-    '(?s)(return new BusinessSettingsResult\(\s*businessName,\s*address,\s*phone,\s*email,\s*)"UGX",')
-if (-not $returnPattern.IsMatch($content)) {
-    throw "Could not locate the hard-coded settings response currency."
-}
-$content = $returnPattern.Replace(
-    $content,
-    {
-        param($match)
-        return $match.Groups[1].Value + "currencyCode,"
-    },
-    1
-)
+$content = Replace-RequiredText `
+    -Text $content `
+    -OldText "            currency_code = 'UGX'," `
+    -NewText '            currency_code = $currencyCode,' `
+    -Description "currency SQL update"
+
+$oldParameters = @'
+        command.Parameters.AddWithValue(
+            "$email",
+            email);
+
+        command.Parameters.AddWithValue(
+            "$receiptFooter",
+'@
+$newParameters = @'
+        command.Parameters.AddWithValue(
+            "$email",
+            email);
+
+        command.Parameters.AddWithValue(
+            "$currencyCode",
+            currencyCode);
+
+        command.Parameters.AddWithValue(
+            "$receiptFooter",
+'@
+$content = Replace-RequiredText `
+    -Text $content `
+    -OldText $oldParameters `
+    -NewText $newParameters `
+    -Description "currency SQL parameter"
+
+$oldAudit = @'
+                phone,
+                email,
+                receiptVerificationEnabled = false
+'@
+$newAudit = @'
+                phone,
+                email,
+                currencyCode,
+                receiptVerificationEnabled = false
+'@
+$content = Replace-RequiredText `
+    -Text $content `
+    -OldText $oldAudit `
+    -NewText $newAudit `
+    -Description "currency audit detail"
+
+$oldResult = @'
+            phone,
+            email,
+            "UGX",
+            receiptFooter,
+'@
+$newResult = @'
+            phone,
+            email,
+            currencyCode,
+            receiptFooter,
+'@
+$content = Replace-RequiredText `
+    -Text $content `
+    -OldText $oldResult `
+    -NewText $newResult `
+    -Description "currency settings response"
 
 $methodAnchor = "    private static string Required("
-if (-not $content.Contains($methodAnchor)) {
-    throw "Could not locate the settings validation method anchor."
-}
-
 $currencyMethod = @'
     private static string NormalizeCurrencyCode(
         string? value)
@@ -134,10 +181,27 @@ $currencyMethod = @'
 
 '@
 
+if (-not $content.Contains($methodAnchor)) {
+    throw "Could not locate the settings validation method anchor."
+}
 $content = $content.Replace(
     $methodAnchor,
     $currencyMethod + $methodAnchor
 )
 
 [System.IO.File]::WriteAllText($servicePath, $content, $utf8)
-Write-Host "Customer-selected three-letter currency handling was applied." -ForegroundColor Green
+
+$verification = Get-Content -LiteralPath $servicePath -Raw -Encoding UTF8
+foreach ($required in @(
+    "request.CurrencyCode",
+    'currency_code = $currencyCode,',
+    '"$currencyCode",',
+    "currencyCode,",
+    "NormalizeCurrencyCode("
+)) {
+    if (-not $verification.Contains($required)) {
+        throw "Currency source verification failed. Missing: $required"
+    }
+}
+
+Write-Host "Customer-selected three-letter currency handling was applied and verified." -ForegroundColor Green

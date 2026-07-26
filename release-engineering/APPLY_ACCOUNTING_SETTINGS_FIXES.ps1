@@ -70,7 +70,7 @@ $content = $parameterPattern.Replace(
         param($match)
         return $match.Groups[1].Value +
             "command.Parameters.AddWithValue(`r`n" +
-            "            \"`$currencyCode\",`r`n" +
+            "            `"`$currencyCode`",`r`n" +
             "            currencyCode);`r`n`r`n        " +
             $match.Groups[2].Value
     },

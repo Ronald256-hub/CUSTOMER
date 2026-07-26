@@ -5,6 +5,7 @@ public sealed record UpdateBusinessSettingsRequest(
     string Address,
     string Phone,
     string Email,
+    string CurrencyCode,
     string ReceiptFooter);
 
 public sealed record BusinessSettingsResult(

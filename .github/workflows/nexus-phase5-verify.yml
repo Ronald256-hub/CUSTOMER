@@ -3,7 +3,8 @@ name: Verify Nexus POS Phase 5 source
 on:
   pull_request:
     paths:
-      - 'releases/Nexus_POS_4.5.0_Phase5_Complete_Source.zip.b64.part*'
+      - 'releases/Nexus_POS_4.5.0_Phase5_CI_Delta_From_4.4.0.zip.b64.part*'
+      - 'releases/Nexus_POS_4.5.0_Phase5_CI_Delta_SHA256.txt'
       - '.github/workflows/nexus-phase5-verify.yml'
   workflow_dispatch:
 
@@ -38,27 +39,50 @@ jobs:
         shell: pwsh
         run: python -m pip install --disable-pip-version-check beautifulsoup4 cryptography pillow pygments
 
-      - name: Reconstruct, verify and expand source package
+      - name: Reconstruct and verify Phase 5 delta
         shell: pwsh
         run: |
-          $parts = Get-ChildItem 'releases/Nexus_POS_4.5.0_Phase5_Complete_Source.zip.b64.part*' | Sort-Object Name
+          $parts = Get-ChildItem 'releases/Nexus_POS_4.5.0_Phase5_CI_Delta_From_4.4.0.zip.b64.part*' | Sort-Object Name
           if ($parts.Count -eq 0) {
-            throw 'Missing source archive parts.'
+            throw 'Missing Phase 5 delta parts.'
           }
           $builder = [System.Text.StringBuilder]::new()
           foreach ($part in $parts) {
             [void]$builder.Append((Get-Content -LiteralPath $part.FullName -Raw).Trim())
           }
-          $archive = 'Nexus_POS_4.5.0_Phase5_Complete_Source.zip'
-          [System.IO.File]::WriteAllBytes($archive, [Convert]::FromBase64String($builder.ToString()))
-          $expectedLine = Get-Content 'releases/Nexus_POS_4.5.0_Phase5_SHA256.txt' -Raw
+          $deltaArchive = 'Nexus_POS_4.5.0_Phase5_CI_Delta_From_4.4.0.zip'
+          [System.IO.File]::WriteAllBytes($deltaArchive, [Convert]::FromBase64String($builder.ToString()))
+          $expectedLine = Get-Content 'releases/Nexus_POS_4.5.0_Phase5_CI_Delta_SHA256.txt' -Raw
           $expected = ($expectedLine -split '\s+')[0].Trim().ToLowerInvariant()
-          $actual = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $actual = (Get-FileHash $deltaArchive -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($actual -ne $expected) {
-            throw "Source archive checksum mismatch. Expected $expected, got $actual."
+            throw "Phase 5 delta checksum mismatch. Expected $expected, got $actual."
           }
-          Expand-Archive -LiteralPath $archive -DestinationPath extracted -Force
-          $root = Resolve-Path 'extracted/Nexus_POS_4.5.0_Phase5_Complete'
+
+      - name: Reconstruct Nexus POS 4.5 source tree
+        shell: pwsh
+        run: |
+          $baseArchive = 'releases/Nexus_POS_4.4.0_Phase4_Hardened_Source.zip'
+          if (-not (Test-Path -LiteralPath $baseArchive -PathType Leaf)) {
+            throw "Missing Phase 4 base source: $baseArchive"
+          }
+          Expand-Archive -LiteralPath $baseArchive -DestinationPath extracted -Force
+          Expand-Archive -LiteralPath 'Nexus_POS_4.5.0_Phase5_CI_Delta_From_4.4.0.zip' -DestinationPath delta -Force
+          $root = Resolve-Path 'extracted/Nexus_POS_4.4.0_Phase4_Hardened'
+          $manifest = Get-Content 'delta/DELTA_MANIFEST.json' -Raw | ConvertFrom-Json
+          foreach ($relativePath in $manifest.deleted) {
+            $target = Join-Path $root $relativePath
+            if (Test-Path -LiteralPath $target) {
+              Remove-Item -LiteralPath $target -Recurse -Force
+            }
+          }
+          foreach ($relativePath in $manifest.changed_or_added) {
+            $source = Join-Path (Resolve-Path 'delta') $relativePath
+            $target = Join-Path $root $relativePath
+            $targetDirectory = Split-Path -Parent $target
+            New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
+            Copy-Item -LiteralPath $source -Destination $target -Force
+          }
           "NEXUS_SOURCE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Run source and invariant validation
@@ -106,3 +130,11 @@ jobs:
           dotnet build 'src/Robo.Pos.Server/Robo.Pos.Server.csproj' -c Release --no-restore -p:TreatWarningsAsErrors=true
           dotnet build 'src/Nexus.Pos.Launcher/Nexus.Pos.Launcher.csproj' -c Release --no-restore -p:TreatWarningsAsErrors=true
           dotnet build 'src/Nexus.License.Service/Nexus.License.Service.csproj' -c Release --no-restore -p:TreatWarningsAsErrors=true
+
+      - name: Upload reconstructed verified source
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-pos-4.5.0-phase5-verified-source
+          path: ${{ env.NEXUS_SOURCE_ROOT }}
+          if-no-files-found: error
+          retention-days: 14

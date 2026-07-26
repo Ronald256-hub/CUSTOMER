@@ -25,7 +25,7 @@ jobs:
             generatedUtc = [DateTimeOffset]::UtcNow.ToString('O')
             valid = $false
             partCount = 0
-            base64Characters = 0
+            decodedBytes = 0
             expectedSha256 = $null
             actualSha256 = $null
             decodeError = $null
@@ -36,17 +36,20 @@ jobs:
             $diagnostic.partCount = $parts.Count
             if ($parts.Count -eq 0) { throw 'Missing Phase 5 delta parts.' }
 
-            $builder = [System.Text.StringBuilder]::new()
-            foreach ($part in $parts) {
-              $text = Get-Content -LiteralPath $part.FullName -Raw
-              $normalized = $text -replace '[^A-Za-z0-9+/=]', ''
-              [void]$builder.Append($normalized)
-            }
-
-            $diagnostic.base64Characters = $builder.Length
-            $bytes = [Convert]::FromBase64String($builder.ToString())
             $archive = 'Nexus_POS_4.5.0_Phase5_CI_Delta_From_4.4.0.zip'
-            [System.IO.File]::WriteAllBytes($archive, $bytes)
+            $stream = [System.IO.File]::Create($archive)
+            try {
+              foreach ($part in $parts) {
+                $text = Get-Content -LiteralPath $part.FullName -Raw
+                $normalized = $text -replace '[^A-Za-z0-9+/=]', ''
+                $bytes = [Convert]::FromBase64String($normalized)
+                $stream.Write($bytes, 0, $bytes.Length)
+                $diagnostic.decodedBytes += $bytes.Length
+              }
+            }
+            finally {
+              $stream.Dispose()
+            }
 
             $expectedLine = Get-Content 'releases/Nexus_POS_4.5.0_Phase5_CI_Delta_SHA256.txt' -Raw
             $diagnostic.expectedSha256 = ($expectedLine -split '\s+')[0].Trim().ToLowerInvariant()

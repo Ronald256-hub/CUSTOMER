@@ -5,6 +5,7 @@ on:
     paths:
       - 'releases/Nexus_POS_4.5.0_Phase5_CI_Delta_From_4.4.0.zip.b64.part*'
       - 'releases/Nexus_POS_4.5.0_Phase5_CI_Delta_SHA256.txt'
+      - 'release-engineering/**'
       - '.github/workflows/nexus-phase5-verify.yml'
   workflow_dispatch:
 
@@ -14,7 +15,7 @@ permissions:
 jobs:
   verify-source:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -83,7 +84,15 @@ jobs:
             New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
             Copy-Item -LiteralPath $source -Destination $target -Force
           }
+          New-Item -ItemType Directory -Path (Join-Path $root 'release-engineering') -Force | Out-Null
+          Copy-Item 'release-engineering\*' (Join-Path $root 'release-engineering') -Recurse -Force
           "NEXUS_SOURCE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Apply verified Windows corrections
+        shell: pwsh
+        run: |
+          & '${{ env.NEXUS_SOURCE_ROOT }}\release-engineering\APPLY_KNOWN_WINDOWS_BUILD_FIXES.ps1' -SourceRoot '${{ env.NEXUS_SOURCE_ROOT }}'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run source and invariant validation
         shell: pwsh
@@ -115,26 +124,58 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
-      - name: Restore .NET projects
+      - name: Restore runtime-specific release packages
         shell: pwsh
         working-directory: ${{ env.NEXUS_SOURCE_ROOT }}
         run: |
-          dotnet restore 'src/Robo.Pos.Server/Robo.Pos.Server.csproj'
-          dotnet restore 'src/Nexus.Pos.Launcher/Nexus.Pos.Launcher.csproj'
+          dotnet restore 'src/Robo.Pos.Server/Robo.Pos.Server.csproj' --runtime win-x64 -p:SelfContained=true -p:PublishReadyToRun=true -p:TargetLatestRuntimePatch=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet restore 'src/Nexus.Pos.Launcher/Nexus.Pos.Launcher.csproj' --runtime win-x64 -p:SelfContained=true -p:PublishSingleFile=true -p:TargetLatestRuntimePatch=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet restore 'src/Nexus.License.Service/Nexus.License.Service.csproj'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build .NET projects with warnings as errors
         shell: pwsh
         working-directory: ${{ env.NEXUS_SOURCE_ROOT }}
         run: |
-          dotnet build 'src/Robo.Pos.Server/Robo.Pos.Server.csproj' -c Release --no-restore -p:TreatWarningsAsErrors=true
-          dotnet build 'src/Nexus.Pos.Launcher/Nexus.Pos.Launcher.csproj' -c Release --no-restore -p:TreatWarningsAsErrors=true
+          dotnet build 'src/Robo.Pos.Server/Robo.Pos.Server.csproj' -c Release -r win-x64 --no-restore -p:TreatWarningsAsErrors=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build 'src/Nexus.Pos.Launcher/Nexus.Pos.Launcher.csproj' -c Release -r win-x64 --no-restore -p:TreatWarningsAsErrors=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet build 'src/Nexus.License.Service/Nexus.License.Service.csproj' -c Release --no-restore -p:TreatWarningsAsErrors=true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Publish self-contained Windows runtime
+        shell: pwsh
+        working-directory: ${{ env.NEXUS_SOURCE_ROOT }}
+        run: |
+          dotnet publish 'src/Robo.Pos.Server/Robo.Pos.Server.csproj' -c Release -r win-x64 --self-contained true --no-restore -o 'ci-publish/server' -p:PublishReadyToRun=true -p:TargetLatestRuntimePatch=true -p:TreatWarningsAsErrors=true -p:DebugType=None -p:DebugSymbols=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet publish 'src/Nexus.Pos.Launcher/Nexus.Pos.Launcher.csproj' -c Release -r win-x64 --self-contained true --no-restore -o 'ci-publish/launcher' -p:PublishSingleFile=true -p:TargetLatestRuntimePatch=true -p:TreatWarningsAsErrors=true -p:DebugType=None -p:DebugSymbols=false
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run automated release smoke test
+        shell: pwsh
+        working-directory: ${{ env.NEXUS_SOURCE_ROOT }}
+        run: |
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'RELEASE_SMOKE_TEST.ps1' -ServerExe 'ci-publish/server/Robo.Pos.Server.exe' -RuntimeRoot 'ci-publish/server'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload reconstructed verified source
         uses: actions/upload-artifact@v4
         with:
           name: nexus-pos-4.5.0-phase5-verified-source
           path: ${{ env.NEXUS_SOURCE_ROOT }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload unsigned Windows pilot runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-pos-4.5.0-windows-pilot-runtime
+          path: |
+            ${{ env.NEXUS_SOURCE_ROOT }}\ci-publish\server
+            ${{ env.NEXUS_SOURCE_ROOT }}\ci-publish\launcher
           if-no-files-found: error
           retention-days: 14

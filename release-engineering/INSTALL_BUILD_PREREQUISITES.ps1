@@ -23,6 +23,14 @@ function Refresh-ProcessPath {
     $env:Path = "$machine;$user"
 }
 
+function Get-CommandSource {
+    param([Parameter(Mandatory)][string]$Name)
+
+    $command = Get-Command $Name -ErrorAction SilentlyContinue
+    if ($command) { return $command.Source }
+    return $null
+}
+
 function Find-InnoCompiler {
     $command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
     if ($command) { return $command.Source }
@@ -164,8 +172,8 @@ $report = [ordered]@{
     dotnetSdk = $versionText
     innoSetup = Find-InnoCompiler
     signTool = Find-SignTool
-    node = (Get-Command node.exe -ErrorAction SilentlyContinue).Source
-    git = (Get-Command git.exe -ErrorAction SilentlyContinue).Source
+    node = Get-CommandSource "node.exe"
+    git = Get-CommandSource "git.exe"
 }
 
 $reportPath = Join-Path $PSScriptRoot "windows-release-environment.json"

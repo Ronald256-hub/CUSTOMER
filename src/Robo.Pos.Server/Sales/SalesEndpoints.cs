@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Robo.Pos.Server.Security;
 using Robo.Pos.Server.Shops;
 
@@ -13,110 +14,8 @@ public static class SalesEndpoints
             async Task<IResult> (
                 HttpContext http,
                 SessionService sessions,
-                SalesService sales,
-                CancellationToken cancellationToken) =>
-            {
-                EndpointAccessDecision access =
-                    await EndpointAccessControl.RequireUserAsync(
-                        http,
-                        sessions,
-                        cancellationToken);
-
-                if (!access.IsAllowed)
-                {
-                    return access.Failure!;
-                }
-
-                ShiftRecord? shift =
-                    await sales.GetOpenShiftAsync(
-                        access.User!,
-                        cancellationToken);
-
-                return Results.Ok(new { shift });
-            });
-
-        app.MapPost(
-            "/api/v3/shifts/open",
-            async Task<IResult> (
-                OpenShiftRequest request,
-                HttpContext http,
-                SessionService sessions,
-                SalesService sales,
-                CancellationToken cancellationToken) =>
-            {
-                EndpointAccessDecision access =
-                    await EndpointAccessControl.RequireUserAsync(
-                        http,
-                        sessions,
-                        cancellationToken);
-
-                if (!access.IsAllowed)
-                {
-                    return access.Failure!;
-                }
-
-                try
-                {
-                    ShiftRecord shift =
-                        await sales.OpenShiftAsync(
-                            access.User!,
-                            request,
-                            cancellationToken);
-
-                    return Results.Created(
-                        $"/api/v3/shifts/{shift.Id}",
-                        shift);
-                }
-                catch (SalesException exception)
-                {
-                    return Error(exception);
-                }
-            });
-
-        app.MapPost(
-            "/api/v3/shifts/close",
-            async Task<IResult> (
-                CloseShiftRequest request,
-                HttpContext http,
-                SessionService sessions,
-                SalesService sales,
-                CancellationToken cancellationToken) =>
-            {
-                EndpointAccessDecision access =
-                    await EndpointAccessControl.RequireUserAsync(
-                        http,
-                        sessions,
-                        cancellationToken);
-
-                if (!access.IsAllowed)
-                {
-                    return access.Failure!;
-                }
-
-                try
-                {
-                    ShiftRecord shift =
-                        await sales.CloseShiftAsync(
-                            access.User!,
-                            request,
-                            cancellationToken);
-
-                    return Results.Ok(shift);
-                }
-                catch (SalesException exception)
-                {
-                    return Error(exception);
-                }
-            });
-
-        app.MapPost(
-            "/api/v3/sales",
-            async Task<IResult> (
-                CompleteSaleRequest request,
-                HttpContext http,
-                SessionService sessions,
                 ShopContextService contexts,
-                ShopSalesService sales,
+                ShopShiftService shifts,
                 CancellationToken cancellationToken) =>
             {
                 EndpointAccessDecision access =
@@ -133,9 +32,160 @@ public static class SalesEndpoints
                 try
                 {
                     ActiveShopContextRecord context =
-                        await contexts.GetOrCreateAsync(
+                        await GetContextAsync(
+                            access,
+                            contexts,
+                            cancellationToken);
+
+                    ShiftRecord? shift =
+                        await shifts.GetOpenShiftAsync(
                             access.User!,
-                            access.SessionId!,
+                            context,
+                            cancellationToken);
+
+                    return Results.Ok(new
+                    {
+                        context.ShopId,
+                        context.ShopCode,
+                        context.ShopName,
+                        shift
+                    });
+                }
+                catch (ShopContextException exception)
+                {
+                    return Error(exception);
+                }
+                catch (SalesException exception)
+                {
+                    return Error(exception);
+                }
+            });
+
+        app.MapPost(
+            "/api/v3/shifts/open",
+            async Task<IResult> (
+                [FromBody] OpenShiftRequest request,
+                HttpContext http,
+                SessionService sessions,
+                ShopContextService contexts,
+                ShopShiftService shifts,
+                CancellationToken cancellationToken) =>
+            {
+                EndpointAccessDecision access =
+                    await EndpointAccessControl.RequireUserAsync(
+                        http,
+                        sessions,
+                        cancellationToken);
+
+                if (!access.IsAllowed)
+                {
+                    return access.Failure!;
+                }
+
+                try
+                {
+                    ActiveShopContextRecord context =
+                        await GetContextAsync(
+                            access,
+                            contexts,
+                            cancellationToken);
+
+                    ShiftRecord shift =
+                        await shifts.OpenShiftAsync(
+                            access.User!,
+                            context,
+                            request,
+                            cancellationToken);
+
+                    return Results.Created(
+                        $"/api/v3/shifts/{shift.Id}",
+                        shift);
+                }
+                catch (ShopContextException exception)
+                {
+                    return Error(exception);
+                }
+                catch (SalesException exception)
+                {
+                    return Error(exception);
+                }
+            });
+
+        app.MapPost(
+            "/api/v3/shifts/close",
+            async Task<IResult> (
+                [FromBody] CloseShiftRequest request,
+                HttpContext http,
+                SessionService sessions,
+                ShopContextService contexts,
+                ShopShiftService shifts,
+                CancellationToken cancellationToken) =>
+            {
+                EndpointAccessDecision access =
+                    await EndpointAccessControl.RequireUserAsync(
+                        http,
+                        sessions,
+                        cancellationToken);
+
+                if (!access.IsAllowed)
+                {
+                    return access.Failure!;
+                }
+
+                try
+                {
+                    ActiveShopContextRecord context =
+                        await GetContextAsync(
+                            access,
+                            contexts,
+                            cancellationToken);
+
+                    ShiftRecord shift =
+                        await shifts.CloseShiftAsync(
+                            access.User!,
+                            context,
+                            request,
+                            cancellationToken);
+
+                    return Results.Ok(shift);
+                }
+                catch (ShopContextException exception)
+                {
+                    return Error(exception);
+                }
+                catch (SalesException exception)
+                {
+                    return Error(exception);
+                }
+            });
+
+        app.MapPost(
+            "/api/v3/sales",
+            async Task<IResult> (
+                [FromBody] CompleteSaleRequest request,
+                HttpContext http,
+                SessionService sessions,
+                ShopContextService contexts,
+                ShopSaleCompletionService sales,
+                CancellationToken cancellationToken) =>
+            {
+                EndpointAccessDecision access =
+                    await EndpointAccessControl.RequireUserAsync(
+                        http,
+                        sessions,
+                        cancellationToken);
+
+                if (!access.IsAllowed)
+                {
+                    return access.Failure!;
+                }
+
+                try
+                {
+                    ActiveShopContextRecord context =
+                        await GetContextAsync(
+                            access,
+                            contexts,
                             cancellationToken);
 
                     CompleteSaleResult result =
@@ -151,13 +201,7 @@ public static class SalesEndpoints
                 }
                 catch (ShopContextException exception)
                 {
-                    return Results.Json(
-                        new
-                        {
-                            error = exception.ErrorCode,
-                            message = exception.Message
-                        },
-                        statusCode: exception.StatusCode);
+                    return Error(exception);
                 }
                 catch (SalesException exception)
                 {
@@ -169,9 +213,11 @@ public static class SalesEndpoints
             "/api/v3/admin/sales/{saleId}/void",
             async Task<IResult> (
                 string saleId,
-                VoidSaleRequest request,
+                [FromBody] VoidSaleRequest request,
                 HttpContext http,
                 SessionService sessions,
+                ShopContextService contexts,
+                ShopReceiptService receipts,
                 ShopSaleVoidService saleVoids,
                 CancellationToken cancellationToken) =>
             {
@@ -188,6 +234,17 @@ public static class SalesEndpoints
 
                 try
                 {
+                    ActiveShopContextRecord context =
+                        await GetContextAsync(
+                            access,
+                            contexts,
+                            cancellationToken);
+
+                    await receipts.EnsureSaleInOrganizationAsync(
+                        context.OrganizationId,
+                        saleId,
+                        cancellationToken);
+
                     VoidSaleResult result =
                         await saleVoids.VoidAsync(
                             access.User!,
@@ -196,6 +253,10 @@ public static class SalesEndpoints
                             cancellationToken);
 
                     return Results.Ok(result);
+                }
+                catch (ShopContextException exception)
+                {
+                    return Error(exception);
                 }
                 catch (SalesException exception)
                 {
@@ -209,41 +270,8 @@ public static class SalesEndpoints
                 int? limit,
                 HttpContext http,
                 SessionService sessions,
-                SalesService sales,
-                CancellationToken cancellationToken) =>
-            {
-                EndpointAccessDecision access =
-                    await EndpointAccessControl.RequireUserAsync(
-                        http,
-                        sessions,
-                        cancellationToken);
-
-                if (!access.IsAllowed)
-                {
-                    return access.Failure!;
-                }
-
-                IReadOnlyList<ReceiptListItem> receipts =
-                    await sales.ListReceiptsAsync(
-                        access.User!,
-                        limit ?? 100,
-                        cancellationToken);
-
-                return Results.Ok(new
-                {
-                    receipts,
-                    count = receipts.Count
-                });
-            });
-
-        app.MapGet(
-            "/api/v3/receipts/{saleId}",
-            async Task<IResult> (
-                string saleId,
-                HttpContext http,
-                SessionService sessions,
-                SalesService sales,
-                SaleVoidService saleVoids,
+                ShopContextService contexts,
+                ShopReceiptService receipts,
                 CancellationToken cancellationToken) =>
             {
                 EndpointAccessDecision access =
@@ -259,9 +287,72 @@ public static class SalesEndpoints
 
                 try
                 {
-                    ReceiptDetails receipt =
-                        await sales.GetReceiptAsync(
+                    ActiveShopContextRecord context =
+                        await GetContextAsync(
+                            access,
+                            contexts,
+                            cancellationToken);
+
+                    IReadOnlyList<ReceiptListItem> records =
+                        await receipts.ListReceiptsAsync(
                             access.User!,
+                            context,
+                            limit ?? 100,
+                            cancellationToken);
+
+                    return Results.Ok(new
+                    {
+                        context.ShopId,
+                        context.ShopCode,
+                        context.ShopName,
+                        receipts = records,
+                        count = records.Count
+                    });
+                }
+                catch (ShopContextException exception)
+                {
+                    return Error(exception);
+                }
+                catch (SalesException exception)
+                {
+                    return Error(exception);
+                }
+            });
+
+        app.MapGet(
+            "/api/v3/receipts/{saleId}",
+            async Task<IResult> (
+                string saleId,
+                HttpContext http,
+                SessionService sessions,
+                ShopContextService contexts,
+                ShopReceiptService receipts,
+                ShopSaleVoidService saleVoids,
+                CancellationToken cancellationToken) =>
+            {
+                EndpointAccessDecision access =
+                    await EndpointAccessControl.RequireUserAsync(
+                        http,
+                        sessions,
+                        cancellationToken);
+
+                if (!access.IsAllowed)
+                {
+                    return access.Failure!;
+                }
+
+                try
+                {
+                    ActiveShopContextRecord context =
+                        await GetContextAsync(
+                            access,
+                            contexts,
+                            cancellationToken);
+
+                    ReceiptDetails receipt =
+                        await receipts.GetReceiptAsync(
+                            access.User!,
+                            context,
                             saleId,
                             cancellationToken);
 
@@ -291,10 +382,18 @@ public static class SalesEndpoints
                         receipt.CompletedAtUtc,
                         receipt.Items,
                         receipt.Documents,
+                        receipt.ShopId,
+                        receipt.ShopCode,
+                        receipt.ShopName,
                         voidReason = voidMetadata?.VoidReason,
                         voidedAtUtc = voidMetadata?.VoidedAtUtc,
-                        voidedByDisplayName = voidMetadata?.VoidedByDisplayName
+                        voidedByDisplayName =
+                            voidMetadata?.VoidedByDisplayName
                     });
+                }
+                catch (ShopContextException exception)
+                {
+                    return Error(exception);
                 }
                 catch (SalesException exception)
                 {
@@ -302,14 +401,14 @@ public static class SalesEndpoints
                 }
             });
 
-        app.MapGet(
-            "/api/v3/receipts/{saleId}/documents/{documentId}",
+        app.MapPost(
+            "/api/v3/receipts/{saleId}/reprint",
             async Task<IResult> (
                 string saleId,
-                string documentId,
                 HttpContext http,
                 SessionService sessions,
-                SalesService sales,
+                ShopContextService contexts,
+                ShopReceiptService receipts,
                 CancellationToken cancellationToken) =>
             {
                 EndpointAccessDecision access =
@@ -325,9 +424,65 @@ public static class SalesEndpoints
 
                 try
                 {
-                    StoredDocumentFile document =
-                        await sales.ResolveDocumentAsync(
+                    ActiveShopContextRecord context =
+                        await GetContextAsync(
+                            access,
+                            contexts,
+                            cancellationToken);
+
+                    ReceiptReprintResult result =
+                        await receipts.RecordReprintAsync(
                             access.User!,
+                            context,
+                            saleId,
+                            cancellationToken);
+
+                    return Results.Ok(result);
+                }
+                catch (ShopContextException exception)
+                {
+                    return Error(exception);
+                }
+                catch (SalesException exception)
+                {
+                    return Error(exception);
+                }
+            });
+
+        app.MapGet(
+            "/api/v3/receipts/{saleId}/documents/{documentId}",
+            async Task<IResult> (
+                string saleId,
+                string documentId,
+                HttpContext http,
+                SessionService sessions,
+                ShopContextService contexts,
+                ShopReceiptService receipts,
+                CancellationToken cancellationToken) =>
+            {
+                EndpointAccessDecision access =
+                    await EndpointAccessControl.RequireUserAsync(
+                        http,
+                        sessions,
+                        cancellationToken);
+
+                if (!access.IsAllowed)
+                {
+                    return access.Failure!;
+                }
+
+                try
+                {
+                    ActiveShopContextRecord context =
+                        await GetContextAsync(
+                            access,
+                            contexts,
+                            cancellationToken);
+
+                    StoredDocumentFile document =
+                        await receipts.ResolveDocumentAsync(
+                            access.User!,
+                            context,
                             saleId,
                             documentId,
                             cancellationToken);
@@ -338,6 +493,62 @@ public static class SalesEndpoints
                         document.DownloadName,
                         enableRangeProcessing: true);
                 }
+                catch (ShopContextException exception)
+                {
+                    return Error(exception);
+                }
+                catch (SalesException exception)
+                {
+                    return Error(exception);
+                }
+            });
+
+        app.MapGet(
+            "/api/v3/reports/sales/summary",
+            async Task<IResult> (
+                string? scope,
+                DateTimeOffset? fromUtc,
+                DateTimeOffset? toUtc,
+                HttpContext http,
+                SessionService sessions,
+                ShopContextService contexts,
+                ShopSalesReportingService reporting,
+                CancellationToken cancellationToken) =>
+            {
+                EndpointAccessDecision access =
+                    await EndpointAccessControl.RequireUserAsync(
+                        http,
+                        sessions,
+                        cancellationToken);
+
+                if (!access.IsAllowed)
+                {
+                    return access.Failure!;
+                }
+
+                try
+                {
+                    ActiveShopContextRecord context =
+                        await GetContextAsync(
+                            access,
+                            contexts,
+                            cancellationToken);
+
+                    SalesSummaryReport report =
+                        await reporting.GetSummaryAsync(
+                            access.User!,
+                            context,
+                            scope,
+                            fromUtc,
+                            toUtc,
+                            cancellationToken);
+
+                    return Results.Ok(report);
+                }
+                catch (ShopContextException exception)
+                {
+                    return Error(exception);
+                }
                 catch (SalesException exception)
                 {
                     return Error(exception);
@@ -345,15 +556,32 @@ public static class SalesEndpoints
             });
     }
 
+    private static Task<ActiveShopContextRecord> GetContextAsync(
+        EndpointAccessDecision access,
+        ShopContextService contexts,
+        CancellationToken cancellationToken) =>
+        contexts.GetOrCreateAsync(
+            access.User!,
+            access.SessionId!,
+            cancellationToken);
+
     private static IResult Error(
-        SalesException exception)
-    {
-        return Results.Json(
+        SalesException exception) =>
+        Results.Json(
             new
             {
                 error = exception.ErrorCode,
                 message = exception.Message
             },
             statusCode: exception.StatusCode);
-    }
+
+    private static IResult Error(
+        ShopContextException exception) =>
+        Results.Json(
+            new
+            {
+                error = exception.ErrorCode,
+                message = exception.Message
+            },
+            statusCode: exception.StatusCode);
 }

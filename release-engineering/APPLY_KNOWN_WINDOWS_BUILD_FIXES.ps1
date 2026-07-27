@@ -176,9 +176,29 @@ if (Test-Path -LiteralPath $smokeTest -PathType Leaf) {
         '$settings.currencyCode -ne "UGX"'
     )
 
+    $oldRequest = '    $response = Invoke-WebRequest @parameters'
+    $newRequest = @'
+    try
+    {
+        $response = Invoke-WebRequest @parameters
+    }
+    catch
+    {
+        throw "$Method $Uri failed: $($_.Exception.Message)"
+    }
+'@
+
+    if ($content.Contains($oldRequest) -and
+        -not $content.Contains('$Method $Uri failed:')) {
+        $content = $content.Replace(
+            $oldRequest,
+            $newRequest.TrimEnd()
+        )
+    }
+
     if ($content -ne $original) {
         Save-Utf8 $smokeTest $content
-        $changes.Add("Aligned smoke-test settings with the current UGX contract in $smokeTest")
+        $changes.Add("Improved smoke-test settings and endpoint diagnostics in $smokeTest")
     }
 }
 

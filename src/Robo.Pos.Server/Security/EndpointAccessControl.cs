@@ -2,11 +2,13 @@ namespace Robo.Pos.Server.Security;
 
 public sealed record EndpointAccessDecision(
     AuthenticatedUser? User,
-    IResult? Failure)
+    IResult? Failure,
+    string? SessionId = null)
 {
     public bool IsAllowed =>
         User is not null &&
-        Failure is null;
+        Failure is null &&
+        !string.IsNullOrWhiteSpace(SessionId);
 }
 
 public static class EndpointAccessControl
@@ -28,7 +30,8 @@ public static class EndpointAccessControl
 
         if (session.Status !=
                 SessionValidationStatus.Success ||
-            session.User is null)
+            session.User is null ||
+            string.IsNullOrWhiteSpace(session.SessionId))
         {
             return new EndpointAccessDecision(
                 null,
@@ -61,7 +64,8 @@ public static class EndpointAccessControl
 
         return new EndpointAccessDecision(
             session.User,
-            null);
+            null,
+            session.SessionId);
     }
 
     public static async Task<EndpointAccessDecision>
@@ -93,7 +97,7 @@ public static class EndpointAccessControl
                     {
                         error = "administrator_required",
                         message =
-                            "Only Baron can perform this operation."
+                            "Only an administrator can perform this operation."
                     },
                     statusCode:
                         StatusCodes.Status403Forbidden));

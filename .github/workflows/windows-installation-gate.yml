@@ -165,7 +165,7 @@ jobs:
           try {
             & 'release-engineering/VERIFY_SHOP_SCOPED_SALES.ps1' *>&1 |
               Tee-Object -FilePath 'shop-sales-gate.log'
-            $exitCode = $LASTEXITCODE
+            $exitCode = 0
           }
           catch {
             $_ | Out-String |

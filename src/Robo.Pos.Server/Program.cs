@@ -3,6 +3,7 @@ using Robo.Pos.Server.Administration;
 using Robo.Pos.Server.Sales;
 using Robo.Pos.Server.Inventory;
 using Robo.Pos.Server.Security;
+using Robo.Pos.Server.Shops;
 using Microsoft.AspNetCore.Identity;
 using Robo.Pos.Server.Data;
 
@@ -26,6 +27,7 @@ builder.Services.AddSingleton<SessionService>();
 builder.Services.AddSingleton<PasswordChangeService>();
 builder.Services.AddSingleton<AdminTellerResetService>();
 builder.Services.AddSingleton<UserAdministrationService>();
+builder.Services.AddSingleton<ShopService>();
 builder.Services.AddSingleton<InventoryService>();
 builder.Services.AddSingleton<AuditDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
@@ -76,8 +78,15 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
 {
     application = "Nexus POS",
     service = "Production Server",
-    version = "4.0.0",
-    status = "running"
+    version = "5.0.0",
+    status = "running",
+    capabilities = new[]
+    {
+        "multi-shop-foundation",
+        "audited-sales",
+        "per-shop-inventory-ledgers",
+        "stock-transfer-workflow"
+    }
 }));
 
 app.MapGet(
@@ -98,7 +107,7 @@ app.MapGet(
         {
             ok = true,
             application = "Nexus POS",
-            version = "4.0.0",
+            version = "5.0.0",
             instanceId,
             schemaVersion = status.SchemaVersion,
             database = status
@@ -180,6 +189,7 @@ app.MapSessionEndpoints();
 app.MapPasswordEndpoints();
 app.MapAdminTellerResetEndpoints();
 app.MapUserAdministrationEndpoints();
+app.MapShopEndpoints();
 app.MapInventoryEndpoints();
 app.MapSalesEndpoints();
 app.MapAdminReferenceEndpoints();

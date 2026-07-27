@@ -58,7 +58,9 @@ function Invoke-Json {
 }
 
 function Get-FreePort {
-    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    $listener = [System.Net.Sockets.TcpListener]::new(
+        [System.Net.IPAddress]::Loopback,
+        0)
     $listener.Start()
     try {
         return ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
@@ -94,7 +96,8 @@ try {
     )
     $previousEnvironment = @{}
     foreach ($name in $environmentNames) {
-        $previousEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+        $previousEnvironment[$name] =
+            [Environment]::GetEnvironmentVariable($name, "Process")
     }
 
     [Environment]::SetEnvironmentVariable("NEXUS_DATA_DIR", $dataDir, "Process")
@@ -118,7 +121,10 @@ try {
     }
     finally {
         foreach ($name in $environmentNames) {
-            [Environment]::SetEnvironmentVariable($name, $previousEnvironment[$name], "Process")
+            [Environment]::SetEnvironmentVariable(
+                $name,
+                $previousEnvironment[$name],
+                "Process")
         }
     }
 
@@ -139,8 +145,11 @@ try {
         }
     }
 
-    if (-not $health -or -not $health.ok -or $health.instanceId -ne $instanceId) {
-        throw "The server did not pass its health check."
+    if (-not $health -or
+        -not $health.ok -or
+        $health.instanceId -ne $instanceId -or
+        $health.schemaVersion -lt 4) {
+        throw "The server did not pass its version-4 health check."
     }
 
     $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
@@ -177,8 +186,14 @@ try {
         currencyCode = "USD"
         receiptFooter = "Automated test document."
     }
-    if ($settings.businessName -ne "Nexus POS Smoke Test" -or $settings.currencyCode -ne "USD") {
+    if ($settings.businessName -ne "Nexus POS Smoke Test" -or
+        $settings.currencyCode -ne "USD") {
         throw "Business white-label settings failed."
+    }
+
+    $initialShops = Invoke-Json -Method GET -Uri "$baseUri/api/v3/shops" -Session $session
+    if ($initialShops.count -ne 1 -or $initialShops.shops[0].code -ne "MAIN") {
+        throw "Existing installation was not migrated to the MAIN shop."
     }
 
     $category = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/inventory/categories" -Session $session -Body @{
@@ -210,13 +225,70 @@ try {
         throw "Product opening stock was not created correctly."
     }
 
+    $branch = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/shops" -Session $session -Body @{
+        code = "BRANCH-02"
+        name = "Smoke Test Branch"
+        address = "Branch Validation Address"
+        phone = "+000000001"
+        email = "branch@example.invalid"
+        taxNumber = "TEST-TIN-02"
+        currencyCode = "USD"
+        timezoneId = "UTC"
+        isHeadOffice = $false
+    }
+    if ($branch.code -ne "BRANCH-02" -or $branch.version -ne 1) {
+        throw "Shop creation failed."
+    }
+
+    $branch = Invoke-Json -Method PUT -Uri "$baseUri/api/v3/admin/shops/$($branch.id)" -Session $session -Body @{
+        name = "Smoke Test Branch Updated"
+        address = "Branch Validation Address"
+        phone = "+000000001"
+        email = "branch@example.invalid"
+        taxNumber = "TEST-TIN-02"
+        currencyCode = "USD"
+        timezoneId = "UTC"
+        isHeadOffice = $false
+        isActive = $true
+        expectedVersion = $branch.version
+    }
+    if ($branch.name -ne "Smoke Test Branch Updated" -or $branch.version -ne 2) {
+        throw "Shop optimistic update failed."
+    }
+
+    $allShops = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/shops" -Session $session
+    if ($allShops.count -ne 2) {
+        throw "Administrator shop listing failed."
+    }
+
     $createdUser = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/users" -Session $session -Body @{
         username = "smoketeller"
         displayName = "Smoke Teller"
         role = "teller"
     }
-    if ($createdUser.user.role -ne "teller" -or [string]::IsNullOrWhiteSpace($createdUser.temporaryPassword)) {
+    if ($createdUser.user.role -ne "teller" -or
+        [string]::IsNullOrWhiteSpace($createdUser.temporaryPassword)) {
         throw "Administrator teller creation failed."
+    }
+
+    $assignment = Invoke-Json -Method PUT -Uri "$baseUri/api/v3/admin/shops/$($branch.id)/users/$($createdUser.user.id)" -Session $session -Body @{
+        accessLevel = "supervisor"
+        isPrimary = $true
+        isActive = $true
+    }
+    if ($assignment.accessLevel -ne "supervisor" -or -not $assignment.isPrimary) {
+        throw "Shop user assignment failed."
+    }
+
+    $branchUsers = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/shops/$($branch.id)/users" -Session $session
+    $assignedTeller = @($branchUsers.users | Where-Object { $_.userId -eq $createdUser.user.id })[0]
+    if (-not $assignedTeller -or $assignedTeller.accessLevel -ne "supervisor") {
+        throw "Assigned shop user could not be listed."
+    }
+
+    $availableShops = Invoke-Json -Method GET -Uri "$baseUri/api/v3/shops" -Session $session
+    if ($availableShops.count -ne 2) {
+        throw "Administrator available-shop discovery failed."
     }
 
     $shift = Invoke-Json -Method POST -Uri "$baseUri/api/v3/shifts/open" -Session $session -Body @{
@@ -240,7 +312,9 @@ try {
         customerTaxNumber = ""
         notes = "Automated release smoke test"
     }
-    if ($sale.totalMinor -ne 1000 -or $sale.changeMinor -ne 0 -or $sale.documents.Count -lt 4) {
+    if ($sale.totalMinor -ne 1000 -or
+        $sale.changeMinor -ne 0 -or
+        $sale.documents.Count -lt 4) {
         throw "Sale completion or receipt/invoice generation failed."
     }
 
@@ -264,20 +338,24 @@ try {
     }
 
     $receipt = Invoke-Json -Method GET -Uri "$baseUri/api/v3/receipts/$($sale.saleId)" -Session $session
-    if ($receipt.status -ne "voided" -or [string]::IsNullOrWhiteSpace($receipt.voidReason)) {
+    if ($receipt.status -ne "voided" -or
+        [string]::IsNullOrWhiteSpace($receipt.voidReason)) {
         throw "Voided receipt metadata was not returned."
     }
 
     $backup = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/backups" -Session $session -Body @{}
-    if (-not $backup.integrityOk -or $backup.schemaVersion -lt 3 -or [string]::IsNullOrWhiteSpace($backup.sha256)) {
-        throw "Backup creation or integrity verification failed."
+    if (-not $backup.integrityOk -or
+        $backup.schemaVersion -lt 4 -or
+        [string]::IsNullOrWhiteSpace($backup.sha256)) {
+        throw "Backup creation or schema-version-4 integrity verification failed."
     }
 
     $closedShift = Invoke-Json -Method POST -Uri "$baseUri/api/v3/shifts/close" -Session $session -Body @{
         countedCashMinor = 0
         notes = "Automated release smoke test"
     }
-    if ($closedShift.status -ne "closed" -or $closedShift.cashVarianceMinor -ne 0) {
+    if ($closedShift.status -ne "closed" -or
+        $closedShift.cashVarianceMinor -ne 0) {
         throw "Shift closure after void failed."
     }
 
@@ -287,7 +365,7 @@ try {
     }
 
     Write-Host "Nexus POS automated release smoke test: PASS"
-    Write-Host "Validated health, password change, business profile, category, product, teller, shift, sale, documents, stock deduction, audited void, stock restoration, backup integrity, and reporting."
+    Write-Host "Validated health, authentication, business profile, multi-shop migration, shop creation/update, shop permissions, inventory, teller, shift, sale, documents, audited void, stock restoration, backup integrity and reporting."
     exit 0
 }
 catch {

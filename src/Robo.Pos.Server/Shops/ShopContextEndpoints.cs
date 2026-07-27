@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Robo.Pos.Server.Sales;
 using Robo.Pos.Server.Security;
 
 namespace Robo.Pos.Server.Shops;
@@ -49,6 +50,7 @@ public static class ShopContextEndpoints
                 HttpContext http,
                 SessionService sessions,
                 ShopContextService contexts,
+                ShopShiftService shifts,
                 CancellationToken cancellationToken) =>
             {
                 EndpointAccessDecision access =
@@ -64,6 +66,25 @@ public static class ShopContextEndpoints
 
                 try
                 {
+                    ActiveShopContextRecord current =
+                        await contexts.GetOrCreateAsync(
+                            access.User!,
+                            access.SessionId!,
+                            cancellationToken);
+
+                    string targetShopId = request.ShopId?.Trim() ?? string.Empty;
+                    if (targetShopId.Length > 0 &&
+                        !string.Equals(
+                            current.ShopId,
+                            targetShopId,
+                            StringComparison.Ordinal))
+                    {
+                        await shifts.EnsureCanSwitchAsync(
+                            access.User!,
+                            targetShopId,
+                            cancellationToken);
+                    }
+
                     ActiveShopContextRecord context =
                         await contexts.SetAsync(
                             access.User!,

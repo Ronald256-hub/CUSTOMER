@@ -158,6 +158,57 @@ public sealed class UserAdministrationService
                 await command.ExecuteNonQueryAsync(cancellationToken);
             }
 
+            await using (var assignment = connection.CreateCommand())
+            {
+                assignment.Transaction = transaction;
+                assignment.CommandText =
+                """
+                INSERT INTO user_shop_access
+                (
+                    user_id,
+                    shop_id,
+                    access_level,
+                    is_primary,
+                    is_active,
+                    assigned_by_user_id,
+                    assigned_at_utc,
+                    updated_at_utc
+                )
+                SELECT
+                    $userId,
+                    s.id,
+                    $accessLevel,
+                    1,
+                    1,
+                    $administratorId,
+                    $now,
+                    $now
+                FROM shops AS s
+                WHERE s.organization_id = 'default-organization'
+                  AND s.is_head_office = 1
+                  AND s.is_active = 1
+                LIMIT 1;
+                """;
+                assignment.Parameters.AddWithValue("$userId", userId);
+                assignment.Parameters.AddWithValue(
+                    "$accessLevel",
+                    role == "admin" ? "manager" : "teller");
+                assignment.Parameters.AddWithValue(
+                    "$administratorId",
+                    administrator.Id);
+                assignment.Parameters.AddWithValue("$now", now.ToString("O"));
+
+                int assigned = await assignment.ExecuteNonQueryAsync(
+                    cancellationToken);
+                if (assigned != 1)
+                {
+                    throw Error(
+                        StatusCodes.Status409Conflict,
+                        "head_office_missing",
+                        "Create or activate a head-office shop before adding users.");
+                }
+            }
+
             await using (var audit = connection.CreateCommand())
             {
                 audit.Transaction = transaction;
@@ -204,7 +255,8 @@ public sealed class UserAdministrationService
                         username,
                         displayName,
                         role,
-                        mustChangePassword = true
+                        mustChangePassword = true,
+                        defaultShopAssigned = true
                     }));
 
                 await audit.ExecuteNonQueryAsync(cancellationToken);

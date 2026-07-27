@@ -206,6 +206,50 @@ public sealed class ShopSaleVoidService
             restoredBaseUnits);
     }
 
+    public async Task<SaleVoidMetadata?> GetMetadataAsync(
+        string saleId,
+        CancellationToken cancellationToken = default)
+    {
+        string normalizedSaleId = saleId?.Trim() ?? string.Empty;
+        if (normalizedSaleId.Length == 0)
+        {
+            return null;
+        }
+
+        await using var connection =
+            new SqliteConnection(_database.ConnectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+        """
+        SELECT
+            sale.void_reason,
+            sale.voided_at_utc,
+            user.display_name
+        FROM sales AS sale
+        LEFT JOIN users AS user
+            ON user.id = sale.voided_by_user_id
+        WHERE sale.id = $saleId
+        LIMIT 1;
+        """;
+        command.Parameters.AddWithValue("$saleId", normalizedSaleId);
+
+        await using var reader =
+            await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new SaleVoidMetadata(
+            reader.IsDBNull(0) ? null : reader.GetString(0),
+            reader.IsDBNull(1)
+                ? null
+                : DateTimeOffset.Parse(reader.GetString(1)),
+            reader.IsDBNull(2) ? null : reader.GetString(2));
+    }
+
     private static async Task<SaleHeader?> ReadSaleHeaderAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,

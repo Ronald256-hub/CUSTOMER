@@ -148,8 +148,8 @@ try {
     if (-not $health -or
         -not $health.ok -or
         $health.instanceId -ne $instanceId -or
-        $health.schemaVersion -lt 4) {
-        throw "The server did not pass its version-4 health check."
+        $health.schemaVersion -lt 5) {
+        throw "The server did not pass its schema-version-5 health check."
     }
 
     $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
@@ -194,6 +194,13 @@ try {
     $initialShops = Invoke-Json -Method GET -Uri "$baseUri/api/v3/shops" -Session $session
     if ($initialShops.count -ne 1 -or $initialShops.shops[0].code -ne "MAIN") {
         throw "Existing installation was not migrated to the MAIN shop."
+    }
+
+    $initialContext = Invoke-Json -Method GET -Uri "$baseUri/api/v3/session/shop-context" -Session $session
+    if ($initialContext.shopCode -ne "MAIN" -or
+        $initialContext.shopId -ne $initialShops.shops[0].id -or
+        $initialContext.version -lt 1) {
+        throw "The session did not initialize an explicit MAIN shop context."
     }
 
     $category = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/inventory/categories" -Session $session -Body @{
@@ -259,6 +266,31 @@ try {
     $allShops = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/shops" -Session $session
     if ($allShops.count -ne 2) {
         throw "Administrator shop listing failed."
+    }
+
+    $branchContext = Invoke-Json -Method PUT -Uri "$baseUri/api/v3/session/shop-context" -Session $session -Body @{
+        shopId = $branch.id
+        expectedVersion = $initialContext.version
+    }
+    if ($branchContext.shopId -ne $branch.id -or
+        $branchContext.shopCode -ne "BRANCH-02" -or
+        $branchContext.version -le $initialContext.version) {
+        throw "Explicit session shop switching failed."
+    }
+
+    $readBranchContext = Invoke-Json -Method GET -Uri "$baseUri/api/v3/session/shop-context" -Session $session
+    if ($readBranchContext.shopId -ne $branch.id -or
+        $readBranchContext.version -ne $branchContext.version) {
+        throw "The selected shop context was not persisted for the session."
+    }
+
+    $mainContext = Invoke-Json -Method PUT -Uri "$baseUri/api/v3/session/shop-context" -Session $session -Body @{
+        shopId = $initialShops.shops[0].id
+        expectedVersion = $branchContext.version
+    }
+    if ($mainContext.shopCode -ne "MAIN" -or
+        $mainContext.version -le $branchContext.version) {
+        throw "Returning the session to the MAIN shop failed."
     }
 
     $createdUser = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/users" -Session $session -Body @{
@@ -345,9 +377,9 @@ try {
 
     $backup = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/backups" -Session $session -Body @{}
     if (-not $backup.integrityOk -or
-        $backup.schemaVersion -lt 4 -or
+        $backup.schemaVersion -lt 5 -or
         [string]::IsNullOrWhiteSpace($backup.sha256)) {
-        throw "Backup creation or schema-version-4 integrity verification failed."
+        throw "Backup creation or schema-version-5 integrity verification failed."
     }
 
     $closedShift = Invoke-Json -Method POST -Uri "$baseUri/api/v3/shifts/close" -Session $session -Body @{
@@ -365,7 +397,7 @@ try {
     }
 
     Write-Host "Nexus POS automated release smoke test: PASS"
-    Write-Host "Validated health, authentication, business profile, multi-shop migration, shop creation/update, shop permissions, inventory, teller, shift, sale, documents, audited void, stock restoration, backup integrity and reporting."
+    Write-Host "Validated health, authentication, business profile, multi-shop migration, explicit session shop context, audited shop switching, shop permissions, inventory, teller, shift, sale, documents, audited void, stock restoration, backup integrity and reporting."
     exit 0
 }
 catch {

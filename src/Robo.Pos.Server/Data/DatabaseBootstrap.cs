@@ -90,6 +90,10 @@ public sealed class DatabaseBootstrap
         await MultiShopMigration.ApplyAsync(
             connection,
             cancellationToken);
+
+        await ActiveShopContextMigration.ApplyAsync(
+            connection,
+            cancellationToken);
     }
 
     public async Task<DatabaseStatus> GetStatusAsync(

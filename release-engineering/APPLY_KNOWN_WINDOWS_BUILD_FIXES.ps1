@@ -167,10 +167,18 @@ if (Test-Path -LiteralPath $smokeTest -PathType Leaf) {
         'Write-Error "Nexus POS automated release smoke test: FAIL - $($_.Exception.Message)"',
         'Write-Host "Nexus POS automated release smoke test: FAIL - $($_.Exception.Message)" -ForegroundColor Red'
     )
+    $content = $content.Replace(
+        'currencyCode = "USD"',
+        'currencyCode = "UGX"'
+    )
+    $content = $content.Replace(
+        '$settings.currencyCode -ne "USD"',
+        '$settings.currencyCode -ne "UGX"'
+    )
 
     if ($content -ne $original) {
         Save-Utf8 $smokeTest $content
-        $changes.Add("Improved smoke-test startup allowance and diagnostics in $smokeTest")
+        $changes.Add("Aligned smoke-test settings with the current UGX contract in $smokeTest")
     }
 }
 

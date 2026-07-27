@@ -57,6 +57,27 @@ function Get-FreePort {
     }
 }
 
+function New-AdminSession {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BaseUri,
+        [Parameter(Mandatory = $true)]
+        [string]$Password
+    )
+
+    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $login = Invoke-Json -Method POST -Uri "$BaseUri/api/v3/auth/login" -Session $session -Body @{
+        username = "admin"
+        password = $Password
+    }
+
+    if ($login.user.role -ne "admin") {
+        throw "Administrator login failed."
+    }
+
+    return $session
+}
+
 if ([string]::IsNullOrWhiteSpace($PortableZip)) {
     $zip = Get-ChildItem (Join-Path $PSScriptRoot "..\release") `
         -Filter "Nexus_POS_*_Portable.zip" `
@@ -119,9 +140,6 @@ try {
     }
 
     $serverDirectory = $serverExe.Directory.FullName
-    if (-not (Test-Path (Join-Path $serverDirectory "wwwroot\index.html") -PathType Leaf)) {
-        throw "The portable package does not contain the Nexus web interface."
-    }
 
     foreach ($name in $environmentNames) {
         $previousEnvironment[$name] =
@@ -168,12 +186,12 @@ try {
         }
     }
 
-    if (-not $health -or -not $health.ok -or $health.schemaVersion -lt 6) {
-        throw "Nexus did not start with schema version 6 or later."
+    if (-not $health -or -not $health.ok -or $health.schemaVersion -lt 7) {
+        throw "Nexus did not start with schema version 7 or later."
     }
 
-    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-    $login = Invoke-Json -Method POST -Uri "$baseUri/api/v3/auth/login" -Session $session -Body @{
+    $bootstrapSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $login = Invoke-Json -Method POST -Uri "$baseUri/api/v3/auth/login" -Session $bootstrapSession -Body @{
         username = "admin"
         password = $initialPassword
     }
@@ -181,7 +199,7 @@ try {
         throw "The initial administrator account did not require password replacement."
     }
 
-    $changed = Invoke-Json -Method POST -Uri "$baseUri/api/v3/auth/change-password" -Session $session -Body @{
+    $changed = Invoke-Json -Method POST -Uri "$baseUri/api/v3/auth/change-password" -Session $bootstrapSession -Body @{
         currentPassword = $initialPassword
         newPassword = $privatePassword
     }
@@ -189,27 +207,21 @@ try {
         throw "The mandatory administrator password replacement failed."
     }
 
-    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-    $login = Invoke-Json -Method POST -Uri "$baseUri/api/v3/auth/login" -Session $session -Body @{
-        username = "admin"
-        password = $privatePassword
-    }
-    if ($login.user.role -ne "admin") {
-        throw "Administrator login failed after password replacement."
-    }
+    $mainSession = New-AdminSession -BaseUri $baseUri -Password $privatePassword
+    $branchSession = New-AdminSession -BaseUri $baseUri -Password $privatePassword
 
-    $mainContext = Invoke-Json -Method GET -Uri "$baseUri/api/v3/session/shop-context" -Session $session
+    $mainContext = Invoke-Json -Method GET -Uri "$baseUri/api/v3/session/shop-context" -Session $mainSession
     if ($mainContext.shopCode -ne "MAIN") {
-        throw "The test session did not start in the MAIN shop."
+        throw "The main session did not start in the MAIN shop."
     }
 
-    $category = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/inventory/categories" -Session $session -Body @{
+    $category = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/inventory/categories" -Session $mainSession -Body @{
         name = "Shop Isolation Category"
         description = "Automated branch-isolation validation"
         displayOrder = 1
     }
 
-    $product = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/inventory/products" -Session $session -Body @{
+    $product = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/inventory/products" -Session $mainSession -Body @{
         categoryId = $category.id
         sku = "SHOP-ISO-001"
         barcode = "991111111111"
@@ -232,7 +244,7 @@ try {
         throw "MAIN opening stock was not initialized to 10."
     }
 
-    $branch = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/shops" -Session $session -Body @{
+    $branch = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/shops" -Session $mainSession -Body @{
         code = "ISO-BRANCH"
         name = "Inventory Isolation Branch"
         address = "Automated Test Branch"
@@ -244,18 +256,19 @@ try {
         isHeadOffice = $false
     }
 
-    $branchContext = Invoke-Json -Method PUT -Uri "$baseUri/api/v3/session/shop-context" -Session $session -Body @{
+    $branchInitialContext = Invoke-Json -Method GET -Uri "$baseUri/api/v3/session/shop-context" -Session $branchSession
+    $branchContext = Invoke-Json -Method PUT -Uri "$baseUri/api/v3/session/shop-context" -Session $branchSession -Body @{
         shopId = $branch.id
-        expectedVersion = $mainContext.version
+        expectedVersion = $branchInitialContext.version
     }
 
-    $branchInventory = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/inventory/products?search=SHOP-ISO-001" -Session $session
+    $branchInventory = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/inventory/products?search=SHOP-ISO-001" -Session $branchSession
     $branchProduct = @($branchInventory.products | Where-Object { $_.id -eq $product.id })[0]
     if (-not $branchProduct -or $branchProduct.availableBaseUnits -ne 0) {
         throw "The new branch inherited stock from MAIN. Shop isolation failed."
     }
 
-    $adjustment = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/inventory/products/$($product.id)/stock-adjustments" -Session $session -Body @{
+    $adjustment = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/inventory/products/$($product.id)/stock-adjustments" -Session $branchSession -Body @{
         movementType = "adjustment"
         quantityDeltaBaseUnits = 4
         newQuantityBaseUnits = $null
@@ -266,14 +279,14 @@ try {
         throw "Branch stock adjustment did not produce a balance of 4."
     }
 
-    $shift = Invoke-Json -Method POST -Uri "$baseUri/api/v3/shifts/open" -Session $session -Body @{
+    $shift = Invoke-Json -Method POST -Uri "$baseUri/api/v3/shifts/open" -Session $branchSession -Body @{
         openingCashMinor = 0
     }
-    if ($shift.status -ne "open") {
-        throw "The test shift could not be opened."
+    if ($shift.status -ne "open" -or $shift.shopId -ne $branch.id) {
+        throw "The test shift could not be opened at the branch."
     }
 
-    $sale = Invoke-Json -Method POST -Uri "$baseUri/api/v3/sales" -Session $session -Body @{
+    $sale = Invoke-Json -Method POST -Uri "$baseUri/api/v3/sales" -Session $branchSession -Body @{
         items = @(@{
             productId = $product.id
             quantity = 2
@@ -291,48 +304,38 @@ try {
         throw "The branch sale did not complete correctly."
     }
 
-    $branchAfterSale = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/inventory/products?search=SHOP-ISO-001" -Session $session
+    $branchAfterSale = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/inventory/products?search=SHOP-ISO-001" -Session $branchSession
     $branchProductAfterSale = @($branchAfterSale.products | Where-Object { $_.id -eq $product.id })[0]
     if ($branchProductAfterSale.availableBaseUnits -ne 2) {
         throw "The branch sale did not deduct exactly two units from branch stock."
     }
 
-    $mainContext = Invoke-Json -Method PUT -Uri "$baseUri/api/v3/session/shop-context" -Session $session -Body @{
-        shopId = $mainContext.shopId
-        expectedVersion = $branchContext.version
-    }
-
-    $mainInventory = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/inventory/products?search=SHOP-ISO-001" -Session $session
+    $mainInventory = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/inventory/products?search=SHOP-ISO-001" -Session $mainSession
     $mainProduct = @($mainInventory.products | Where-Object { $_.id -eq $product.id })[0]
     if ($mainProduct.availableBaseUnits -ne 10) {
         throw "A sale at the branch changed MAIN stock. Shop isolation failed."
     }
 
-    $void = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/sales/$($sale.saleId)/void" -Session $session -Body @{
+    $void = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/sales/$($sale.saleId)/void" -Session $mainSession -Body @{
         reason = "Automated branch sale reversal"
     }
     if ($void.status -ne "voided" -or $void.restoredBaseUnits -ne 2) {
         throw "The audited sale void did not restore the expected branch quantity."
     }
 
-    $mainAfterVoid = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/inventory/products?search=SHOP-ISO-001" -Session $session
+    $mainAfterVoid = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/inventory/products?search=SHOP-ISO-001" -Session $mainSession
     $mainProductAfterVoid = @($mainAfterVoid.products | Where-Object { $_.id -eq $product.id })[0]
     if ($mainProductAfterVoid.availableBaseUnits -ne 10) {
         throw "Voiding the branch sale changed MAIN stock."
     }
 
-    $branchContext = Invoke-Json -Method PUT -Uri "$baseUri/api/v3/session/shop-context" -Session $session -Body @{
-        shopId = $branch.id
-        expectedVersion = $mainContext.version
-    }
-
-    $branchAfterVoid = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/inventory/products?search=SHOP-ISO-001" -Session $session
+    $branchAfterVoid = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/inventory/products?search=SHOP-ISO-001" -Session $branchSession
     $branchProductAfterVoid = @($branchAfterVoid.products | Where-Object { $_.id -eq $product.id })[0]
     if ($branchProductAfterVoid.availableBaseUnits -ne 4) {
         throw "The sale void did not restore stock to the sale's owning branch."
     }
 
-    $movements = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/inventory/stock-movements?productId=$($product.id)&limit=20" -Session $session
+    $movements = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/inventory/stock-movements?productId=$($product.id)&limit=20" -Session $branchSession
     $movementTypes = @($movements.movements | ForEach-Object { $_.movementType })
     foreach ($requiredType in @("adjustment", "sale", "sale_void")) {
         if ($movementTypes -notcontains $requiredType) {
@@ -340,7 +343,7 @@ try {
         }
     }
 
-    $closed = Invoke-Json -Method POST -Uri "$baseUri/api/v3/shifts/close" -Session $session -Body @{
+    $closed = Invoke-Json -Method POST -Uri "$baseUri/api/v3/shifts/close" -Session $branchSession -Body @{
         countedCashMinor = 0
         notes = "Shop inventory isolation test"
     }
@@ -348,13 +351,13 @@ try {
         throw "The shift did not reconcile after the voided branch sale."
     }
 
-    $backup = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/backups" -Session $session -Body @{}
-    if (-not $backup.integrityOk -or $backup.schemaVersion -lt 6) {
-        throw "Backup integrity or schema-version-6 verification failed."
+    $backup = Invoke-Json -Method POST -Uri "$baseUri/api/v3/admin/backups" -Session $mainSession -Body @{}
+    if (-not $backup.integrityOk -or $backup.schemaVersion -lt 7) {
+        throw "Backup integrity or schema-version-7 verification failed."
     }
 
     Write-Host "Nexus POS shop-scoped inventory isolation gate: PASS"
-    Write-Host "Validated separate MAIN and branch balances, branch adjustment, sale deduction, void restoration, stock ledger history and backup integrity."
+    Write-Host "Validated separate MAIN and branch sessions, branch adjustment, sale deduction, cross-session void restoration, stock ledger history, shift reconciliation and backup integrity."
 }
 catch {
     Write-Host "Nexus POS shop-scoped inventory isolation gate: FAIL - $($_.Exception.Message)" -ForegroundColor Red

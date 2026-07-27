@@ -17,7 +17,10 @@ public sealed record ShiftRecord(
     long? CountedCashMinor,
     long? CashVarianceMinor,
     DateTimeOffset OpenedAtUtc,
-    DateTimeOffset? ClosedAtUtc);
+    DateTimeOffset? ClosedAtUtc,
+    string? ShopId = null,
+    string? ShopCode = null,
+    string? ShopName = null);
 
 public sealed record SaleLineRequest(
     string ProductId,
@@ -65,7 +68,10 @@ public sealed record CompleteSaleResult(
     string PaymentMethod,
     DateTimeOffset CompletedAtUtc,
     IReadOnlyList<CompletedSaleLine> Items,
-    IReadOnlyList<GeneratedSaleDocument> Documents);
+    IReadOnlyList<GeneratedSaleDocument> Documents,
+    string? ShopId = null,
+    string? ShopCode = null,
+    string? ShopName = null);
 
 public sealed record ReceiptListItem(
     string SaleId,
@@ -76,7 +82,10 @@ public sealed record ReceiptListItem(
     long TotalMinor,
     string PaymentMethod,
     DateTimeOffset CompletedAtUtc,
-    int DocumentCount);
+    int DocumentCount,
+    string? ShopId = null,
+    string? ShopCode = null,
+    string? ShopName = null);
 
 public sealed record ReceiptDetails(
     string SaleId,
@@ -97,7 +106,10 @@ public sealed record ReceiptDetails(
     string Notes,
     DateTimeOffset CompletedAtUtc,
     IReadOnlyList<CompletedSaleLine> Items,
-    IReadOnlyList<GeneratedSaleDocument> Documents);
+    IReadOnlyList<GeneratedSaleDocument> Documents,
+    string? ShopId = null,
+    string? ShopCode = null,
+    string? ShopName = null);
 
 public sealed record StoredDocumentFile(
     string FullPath,

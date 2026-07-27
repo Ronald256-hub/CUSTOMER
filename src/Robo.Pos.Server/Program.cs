@@ -28,6 +28,7 @@ builder.Services.AddSingleton<PasswordChangeService>();
 builder.Services.AddSingleton<AdminTellerResetService>();
 builder.Services.AddSingleton<UserAdministrationService>();
 builder.Services.AddSingleton<ShopService>();
+builder.Services.AddSingleton<ShopContextService>();
 builder.Services.AddSingleton<InventoryService>();
 builder.Services.AddSingleton<AuditDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
@@ -78,11 +79,13 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
 {
     application = "Nexus POS",
     service = "Production Server",
-    version = "5.0.0",
+    version = "5.1.0",
     status = "running",
     capabilities = new[]
     {
         "multi-shop-foundation",
+        "explicit-session-shop-context",
+        "audited-shop-switching",
         "audited-sales",
         "per-shop-inventory-ledgers",
         "stock-transfer-workflow"
@@ -107,7 +110,7 @@ app.MapGet(
         {
             ok = true,
             application = "Nexus POS",
-            version = "5.0.0",
+            version = "5.1.0",
             instanceId,
             schemaVersion = status.SchemaVersion,
             database = status
@@ -190,6 +193,7 @@ app.MapPasswordEndpoints();
 app.MapAdminTellerResetEndpoints();
 app.MapUserAdministrationEndpoints();
 app.MapShopEndpoints();
+app.MapShopContextEndpoints();
 app.MapInventoryEndpoints();
 app.MapSalesEndpoints();
 app.MapAdminReferenceEndpoints();

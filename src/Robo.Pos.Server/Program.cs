@@ -25,6 +25,7 @@ builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<SessionService>();
 builder.Services.AddSingleton<PasswordChangeService>();
 builder.Services.AddSingleton<AdminTellerResetService>();
+builder.Services.AddSingleton<UserAdministrationService>();
 builder.Services.AddSingleton<InventoryService>();
 builder.Services.AddSingleton<AuditDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
@@ -177,6 +178,7 @@ app.MapPost(
 app.MapSessionEndpoints();
 app.MapPasswordEndpoints();
 app.MapAdminTellerResetEndpoints();
+app.MapUserAdministrationEndpoints();
 app.MapInventoryEndpoints();
 app.MapSalesEndpoints();
 app.MapAdminReferenceEndpoints();

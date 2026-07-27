@@ -66,7 +66,8 @@ jobs:
             'RELEASE_SMOKE_TEST.ps1',
             'release-engineering/BOOTSTRAP_WINDOWS_RELEASE.ps1',
             'release-engineering/INSTALL_BUILD_PREREQUISITES.ps1',
-            'release-engineering/INSTALL_NEXUS_POS.ps1'
+            'release-engineering/INSTALL_NEXUS_POS.ps1',
+            'release-engineering/VERIFY_SHOP_SCOPED_INVENTORY.ps1'
           )) {
             if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
               throw "Missing Windows entry point: $requiredFile"
@@ -148,6 +149,12 @@ jobs:
             Get-Content 'windows-release-build.log' -Tail 250 -ErrorAction SilentlyContinue
             throw "Complete Windows release build failed with exit code $env:RELEASE_BUILD_EXIT_CODE."
           }
+
+      - name: Verify shop-scoped inventory isolation
+        shell: pwsh
+        run: |
+          & 'release-engineering/VERIFY_SHOP_SCOPED_INVENTORY.ps1'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify release artifacts
         shell: pwsh

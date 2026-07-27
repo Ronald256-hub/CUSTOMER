@@ -30,9 +30,12 @@ builder.Services.AddSingleton<UserAdministrationService>();
 builder.Services.AddSingleton<ShopService>();
 builder.Services.AddSingleton<ShopContextService>();
 builder.Services.AddSingleton<InventoryService>();
+builder.Services.AddSingleton<ShopInventoryService>();
 builder.Services.AddSingleton<AuditDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
+builder.Services.AddSingleton<ShopSalesService>();
 builder.Services.AddSingleton<SaleVoidService>();
+builder.Services.AddSingleton<ShopSaleVoidService>();
 builder.Services.AddSingleton<BusinessOperationsService>();
 builder.Services.AddSingleton<SystemAdministrationService>();
 
@@ -79,15 +82,17 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
 {
     application = "Nexus POS",
     service = "Production Server",
-    version = "5.1.0",
+    version = "5.2.0",
     status = "running",
     capabilities = new[]
     {
         "multi-shop-foundation",
         "explicit-session-shop-context",
         "audited-shop-switching",
-        "audited-sales",
-        "per-shop-inventory-ledgers",
+        "shop-scoped-product-availability",
+        "shop-scoped-stock-adjustments",
+        "shop-scoped-sale-deduction",
+        "shop-scoped-sale-void-restoration",
         "stock-transfer-workflow"
     }
 }));
@@ -110,7 +115,7 @@ app.MapGet(
         {
             ok = true,
             application = "Nexus POS",
-            version = "5.1.0",
+            version = "5.2.0",
             instanceId,
             schemaVersion = status.SchemaVersion,
             database = status

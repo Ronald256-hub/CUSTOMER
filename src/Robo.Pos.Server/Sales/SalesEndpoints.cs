@@ -1,4 +1,5 @@
 using Robo.Pos.Server.Security;
+using Robo.Pos.Server.Shops;
 
 namespace Robo.Pos.Server.Sales;
 
@@ -16,11 +17,10 @@ public static class SalesEndpoints
                 CancellationToken cancellationToken) =>
             {
                 EndpointAccessDecision access =
-                    await EndpointAccessControl
-                        .RequireUserAsync(
-                            http,
-                            sessions,
-                            cancellationToken);
+                    await EndpointAccessControl.RequireUserAsync(
+                        http,
+                        sessions,
+                        cancellationToken);
 
                 if (!access.IsAllowed)
                 {
@@ -32,11 +32,7 @@ public static class SalesEndpoints
                         access.User!,
                         cancellationToken);
 
-                return Results.Ok(
-                    new
-                    {
-                        shift
-                    });
+                return Results.Ok(new { shift });
             });
 
         app.MapPost(
@@ -49,11 +45,10 @@ public static class SalesEndpoints
                 CancellationToken cancellationToken) =>
             {
                 EndpointAccessDecision access =
-                    await EndpointAccessControl
-                        .RequireUserAsync(
-                            http,
-                            sessions,
-                            cancellationToken);
+                    await EndpointAccessControl.RequireUserAsync(
+                        http,
+                        sessions,
+                        cancellationToken);
 
                 if (!access.IsAllowed)
                 {
@@ -88,11 +83,10 @@ public static class SalesEndpoints
                 CancellationToken cancellationToken) =>
             {
                 EndpointAccessDecision access =
-                    await EndpointAccessControl
-                        .RequireUserAsync(
-                            http,
-                            sessions,
-                            cancellationToken);
+                    await EndpointAccessControl.RequireUserAsync(
+                        http,
+                        sessions,
+                        cancellationToken);
 
                 if (!access.IsAllowed)
                 {
@@ -121,15 +115,15 @@ public static class SalesEndpoints
                 CompleteSaleRequest request,
                 HttpContext http,
                 SessionService sessions,
-                SalesService sales,
+                ShopContextService contexts,
+                ShopSalesService sales,
                 CancellationToken cancellationToken) =>
             {
                 EndpointAccessDecision access =
-                    await EndpointAccessControl
-                        .RequireUserAsync(
-                            http,
-                            sessions,
-                            cancellationToken);
+                    await EndpointAccessControl.RequireUserAsync(
+                        http,
+                        sessions,
+                        cancellationToken);
 
                 if (!access.IsAllowed)
                 {
@@ -138,15 +132,32 @@ public static class SalesEndpoints
 
                 try
                 {
+                    ActiveShopContextRecord context =
+                        await contexts.GetOrCreateAsync(
+                            access.User!,
+                            access.SessionId!,
+                            cancellationToken);
+
                     CompleteSaleResult result =
                         await sales.CompleteSaleAsync(
                             access.User!,
+                            context,
                             request,
                             cancellationToken);
 
                     return Results.Created(
                         $"/api/v3/receipts/{result.SaleId}",
                         result);
+                }
+                catch (ShopContextException exception)
+                {
+                    return Results.Json(
+                        new
+                        {
+                            error = exception.ErrorCode,
+                            message = exception.Message
+                        },
+                        statusCode: exception.StatusCode);
                 }
                 catch (SalesException exception)
                 {
@@ -161,15 +172,14 @@ public static class SalesEndpoints
                 VoidSaleRequest request,
                 HttpContext http,
                 SessionService sessions,
-                SaleVoidService saleVoids,
+                ShopSaleVoidService saleVoids,
                 CancellationToken cancellationToken) =>
             {
                 EndpointAccessDecision access =
-                    await EndpointAccessControl
-                        .RequireAdminAsync(
-                            http,
-                            sessions,
-                            cancellationToken);
+                    await EndpointAccessControl.RequireAdminAsync(
+                        http,
+                        sessions,
+                        cancellationToken);
 
                 if (!access.IsAllowed)
                 {
@@ -203,30 +213,27 @@ public static class SalesEndpoints
                 CancellationToken cancellationToken) =>
             {
                 EndpointAccessDecision access =
-                    await EndpointAccessControl
-                        .RequireUserAsync(
-                            http,
-                            sessions,
-                            cancellationToken);
+                    await EndpointAccessControl.RequireUserAsync(
+                        http,
+                        sessions,
+                        cancellationToken);
 
                 if (!access.IsAllowed)
                 {
                     return access.Failure!;
                 }
 
-                IReadOnlyList<ReceiptListItem>
-                    receipts =
+                IReadOnlyList<ReceiptListItem> receipts =
                     await sales.ListReceiptsAsync(
                         access.User!,
                         limit ?? 100,
                         cancellationToken);
 
-                return Results.Ok(
-                    new
-                    {
-                        receipts,
-                        count = receipts.Count
-                    });
+                return Results.Ok(new
+                {
+                    receipts,
+                    count = receipts.Count
+                });
             });
 
         app.MapGet(
@@ -240,11 +247,10 @@ public static class SalesEndpoints
                 CancellationToken cancellationToken) =>
             {
                 EndpointAccessDecision access =
-                    await EndpointAccessControl
-                        .RequireUserAsync(
-                            http,
-                            sessions,
-                            cancellationToken);
+                    await EndpointAccessControl.RequireUserAsync(
+                        http,
+                        sessions,
+                        cancellationToken);
 
                 if (!access.IsAllowed)
                 {
@@ -287,8 +293,7 @@ public static class SalesEndpoints
                         receipt.Documents,
                         voidReason = voidMetadata?.VoidReason,
                         voidedAtUtc = voidMetadata?.VoidedAtUtc,
-                        voidedByDisplayName =
-                            voidMetadata?.VoidedByDisplayName
+                        voidedByDisplayName = voidMetadata?.VoidedByDisplayName
                     });
                 }
                 catch (SalesException exception)
@@ -308,11 +313,10 @@ public static class SalesEndpoints
                 CancellationToken cancellationToken) =>
             {
                 EndpointAccessDecision access =
-                    await EndpointAccessControl
-                        .RequireUserAsync(
-                            http,
-                            sessions,
-                            cancellationToken);
+                    await EndpointAccessControl.RequireUserAsync(
+                        http,
+                        sessions,
+                        cancellationToken);
 
                 if (!access.IsAllowed)
                 {
@@ -350,7 +354,6 @@ public static class SalesEndpoints
                 error = exception.ErrorCode,
                 message = exception.Message
             },
-            statusCode:
-                exception.StatusCode);
+            statusCode: exception.StatusCode);
     }
 }

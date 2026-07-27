@@ -29,6 +29,7 @@ builder.Services.AddSingleton<UserAdministrationService>();
 builder.Services.AddSingleton<InventoryService>();
 builder.Services.AddSingleton<AuditDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
+builder.Services.AddSingleton<SaleVoidService>();
 builder.Services.AddSingleton<BusinessOperationsService>();
 builder.Services.AddSingleton<SystemAdministrationService>();
 

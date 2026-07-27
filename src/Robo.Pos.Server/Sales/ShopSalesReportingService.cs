@@ -41,6 +41,9 @@ public sealed record SalesSummaryReport(
 
 public sealed class ShopSalesReportingService
 {
+    private static readonly TimeSpan MaximumReportPeriod =
+        TimeSpan.FromDays(36525);
+
     private readonly DatabaseBootstrap _database;
 
     public ShopSalesReportingService(DatabaseBootstrap database)
@@ -86,11 +89,11 @@ public sealed class ShopSalesReportingService
                 "The report start time must be earlier than the end time.");
         }
 
-        if (toUtc - fromUtc > TimeSpan.FromDays(366))
+        if (toUtc - fromUtc > MaximumReportPeriod)
         {
             throw Validation(
                 "report_period_too_large",
-                "A sales report cannot cover more than 366 days at once.");
+                "A sales summary cannot cover more than 100 years at once.");
         }
 
         await using var connection =

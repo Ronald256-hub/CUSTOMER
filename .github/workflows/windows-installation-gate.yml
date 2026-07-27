@@ -3,9 +3,14 @@ name: Validate Windows installation engineering
 on:
   pull_request:
     paths:
+      - 'BUILD_WINDOWS_RELEASE.ps1'
+      - 'BUILD_NEXUS_WINDOWS.cmd'
+      - 'RELEASE_SMOKE_TEST.ps1'
       - 'release-engineering/**'
       - '.github/workflows/windows-installation-gate.yml'
       - 'src/**'
+      - 'app/**'
+      - 'setup/**'
   workflow_dispatch:
 
 permissions:
@@ -14,7 +19,7 @@ permissions:
 jobs:
   validate-windows-installation:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -25,11 +30,13 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Parse PowerShell release scripts
+      - name: Parse all release PowerShell scripts
         shell: pwsh
         run: |
-          $files = Get-ChildItem 'release-engineering' -Filter '*.ps1' -File
-          if ($files.Count -eq 0) { throw 'No release-engineering PowerShell scripts were found.' }
+          $files = @(
+            Get-Item 'BUILD_WINDOWS_RELEASE.ps1', 'RELEASE_SMOKE_TEST.ps1'
+            Get-ChildItem 'release-engineering' -Filter '*.ps1' -File
+          )
 
           foreach ($file in $files) {
             $tokens = $null
@@ -50,9 +57,22 @@ jobs:
 
           Write-Host "PowerShell syntax passed for $($files.Count) release files."
 
-      - name: Verify deployment safety rules
+      - name: Verify deployment safety and entry points
         shell: pwsh
         run: |
+          foreach ($requiredFile in @(
+            'BUILD_WINDOWS_RELEASE.ps1',
+            'BUILD_NEXUS_WINDOWS.cmd',
+            'RELEASE_SMOKE_TEST.ps1',
+            'release-engineering/BOOTSTRAP_WINDOWS_RELEASE.ps1',
+            'release-engineering/INSTALL_BUILD_PREREQUISITES.ps1',
+            'release-engineering/INSTALL_NEXUS_POS.ps1'
+          )) {
+            if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
+              throw "Missing Windows entry point: $requiredFile"
+            }
+          }
+
           $customerInstaller = Get-Content 'release-engineering/INSTALL_NEXUS_POS.ps1' -Raw
           if ($customerInstaller -notmatch 'published self-contained') {
             throw 'Customer installer must document self-contained deployment.'
@@ -72,36 +92,91 @@ jobs:
             }
           }
 
-      - name: Apply known corrections to repository source
+          $buildScript = Get-Content 'BUILD_WINDOWS_RELEASE.ps1' -Raw
+          foreach ($required in @(
+            'PublishReadyToRun=true',
+            'PublishSingleFile=true',
+            'RELEASE_SMOKE_TEST.ps1',
+            'SHA256SUMS.txt'
+          )) {
+            if (-not $buildScript.Contains($required)) {
+              throw "Build entry point is missing required control: $required"
+            }
+          }
+
+      - name: Apply verified source and build corrections
         shell: pwsh
         run: |
           & 'release-engineering/APPLY_KNOWN_WINDOWS_BUILD_FIXES.ps1' -SourceRoot $PWD
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Restore and build server when present
+      - name: Build, publish and smoke-test complete Windows release
+        id: release_build
         shell: pwsh
         run: |
-          $server = 'src/Robo.Pos.Server/Robo.Pos.Server.csproj'
-          if (-not (Test-Path $server)) {
-            Write-Host 'Server project is not stored directly in this branch; script validation remains authoritative.'
-            exit 0
+          $exitCode = 0
+          try {
+            & '.\BUILD_WINDOWS_RELEASE.ps1' -Configuration Release -SkipInstaller *>&1 |
+              Tee-Object -FilePath 'windows-release-build.log'
+            $exitCode = $LASTEXITCODE
+          }
+          catch {
+            $_ | Out-String | Tee-Object -FilePath 'windows-release-build.log' -Append
+            $exitCode = 1
           }
 
-          dotnet restore $server --runtime win-x64 -p:SelfContained=true -p:PublishReadyToRun=true -p:TargetLatestRuntimePatch=true
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet build $server -c Release -r win-x64 --no-restore -p:TreatWarningsAsErrors=true
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RELEASE_BUILD_EXIT_CODE=$exitCode" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Release build exit code: $exitCode"
+          exit 0
 
-      - name: Restore and build launcher when present
+      - name: Upload release build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-pos-windows-release-build-diagnostics
+          path: |
+            windows-release-build.log
+            release/smoke-diagnostics-*/**
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Enforce release build result
         shell: pwsh
         run: |
-          $launcher = 'src/Nexus.Pos.Launcher/Nexus.Pos.Launcher.csproj'
-          if (-not (Test-Path $launcher)) {
-            Write-Host 'Launcher project is not stored directly in this branch.'
-            exit 0
+          if ($env:RELEASE_BUILD_EXIT_CODE -ne '0') {
+            Get-Content 'windows-release-build.log' -Tail 250 -ErrorAction SilentlyContinue
+            throw "Complete Windows release build failed with exit code $env:RELEASE_BUILD_EXIT_CODE."
           }
 
-          dotnet restore $launcher --runtime win-x64 -p:SelfContained=true -p:PublishSingleFile=true -p:TargetLatestRuntimePatch=true
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet build $launcher -c Release -r win-x64 --no-restore -p:TreatWarningsAsErrors=true
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify release artifacts
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem 'release' -Filter 'Nexus_POS_*_Portable.zip' -File | Select-Object -First 1
+          if (-not $zip) { throw 'Portable Nexus POS ZIP was not produced.' }
+
+          $manifest = 'release/SHA256SUMS.txt'
+          if (-not (Test-Path $manifest -PathType Leaf)) {
+            throw 'SHA256SUMS.txt was not produced.'
+          }
+
+          $line = Get-Content $manifest | Where-Object { $_ -like "*$($zip.Name)" } | Select-Object -First 1
+          if (-not $line) { throw 'Portable ZIP is missing from SHA256SUMS.txt.' }
+
+          $expected = ($line -split '\s+')[0].ToLowerInvariant()
+          $actual = (Get-FileHash $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "Portable ZIP checksum mismatch. Expected $expected, got $actual."
+          }
+
+      - name: Upload verified unsigned pilot release
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-pos-windows-verified-unsigned-pilot
+          path: |
+            release/*.zip
+            release/SHA256SUMS.txt
+            release/INSTALL_NEXUS_POS.ps1
+            release/INSTALL_NEXUS_POS.cmd
+          if-no-files-found: error
+          retention-days: 14

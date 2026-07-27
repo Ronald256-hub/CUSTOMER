@@ -110,7 +110,7 @@ if (-not [string]::IsNullOrWhiteSpace($CertificateThumbprint) -and
 }
 
 if (-not (Test-Path -LiteralPath $fixScript -PathType Leaf)) {
-    throw "Known-fix script was not found: $fixScript"
+    throw "Verified source/build correction script was not found: $fixScript"
 }
 
 & powershell.exe -NoProfile -ExecutionPolicy Bypass `

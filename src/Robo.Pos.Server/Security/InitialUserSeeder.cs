@@ -13,30 +13,6 @@ public sealed record PosUser(
 
 public sealed class InitialUserSeeder
 {
-    private static readonly BootstrapUser[] RequiredUsers =
-    [
-        new(
-            Username: "baron",
-            DisplayName: "Baron",
-            Role: "admin",
-            PasswordEnvironmentVariable:
-                "ROBO_ADMIN_INITIAL_PASSWORD"),
-
-        new(
-            Username: "teller1",
-            DisplayName: "Teller One",
-            Role: "teller",
-            PasswordEnvironmentVariable:
-                "ROBO_TELLER1_INITIAL_PASSWORD"),
-
-        new(
-            Username: "teller2",
-            DisplayName: "Teller Two",
-            Role: "teller",
-            PasswordEnvironmentVariable:
-                "ROBO_TELLER2_INITIAL_PASSWORD")
-    ];
-
     private readonly DatabaseBootstrap _database;
     private readonly IPasswordHasher<PosUser> _passwordHasher;
 
@@ -56,82 +32,67 @@ public sealed class InitialUserSeeder
 
         await connection.OpenAsync(cancellationToken);
 
-        var pendingUsers =
-            new List<(BootstrapUser Definition, string Password)>();
-
-        foreach (BootstrapUser definition in RequiredUsers)
+        await using (var countCommand = connection.CreateCommand())
         {
-            await using var check = connection.CreateCommand();
+            countCommand.CommandText = "SELECT COUNT(1) FROM users;";
 
-            check.CommandText =
-            """
-            SELECT COUNT(1)
-            FROM users
-            WHERE username_normalized = $username;
-            """;
+            int existingUsers = Convert.ToInt32(
+                await countCommand.ExecuteScalarAsync(cancellationToken));
 
-            check.Parameters.AddWithValue(
-                "$username",
-                NormalizeUsername(definition.Username));
-
-            int exists = Convert.ToInt32(
-                await check.ExecuteScalarAsync(cancellationToken));
-
-            if (exists > 0)
+            if (existingUsers > 0)
             {
-                continue;
+                return;
             }
-
-            string? password =
-                Environment.GetEnvironmentVariable(
-                    definition.PasswordEnvironmentVariable);
-
-            if (string.IsNullOrWhiteSpace(password))
-            {
-                throw new InvalidOperationException(
-                    $"Initial account '{definition.Username}' is missing " +
-                    $"the environment variable " +
-                    $"'{definition.PasswordEnvironmentVariable}'.");
-            }
-
-            ValidatePassword(
-                definition.Username,
-                password);
-
-            pendingUsers.Add((definition, password));
         }
 
-        if (pendingUsers.Count == 0)
+        string username =
+            Environment.GetEnvironmentVariable("NEXUS_ADMIN_USERNAME")
+                ?.Trim()
+            ?? "admin";
+
+        string displayName =
+            Environment.GetEnvironmentVariable("NEXUS_ADMIN_DISPLAY_NAME")
+                ?.Trim()
+            ?? "Business Owner";
+
+        string? password =
+            Environment.GetEnvironmentVariable(
+                "NEXUS_ADMIN_INITIAL_PASSWORD")
+            ?? Environment.GetEnvironmentVariable(
+                "ROBO_ADMIN_INITIAL_PASSWORD");
+
+        ValidateUsername(username);
+        ValidateDisplayName(displayName);
+
+        PasswordPolicyResult policy =
+            PasswordPolicy.Validate(password);
+
+        if (!policy.IsValid)
         {
-            return;
+            throw new InvalidOperationException(
+                "The first administrator password is missing or invalid: " +
+                policy.Message);
         }
+
+        string userId = Guid.NewGuid().ToString("N");
+        string timestamp = DateTimeOffset.UtcNow.ToString("O");
+
+        var user = new PosUser(
+            userId,
+            username,
+            displayName,
+            "admin");
+
+        string passwordHash =
+            _passwordHasher.HashPassword(user, password!);
 
         await using var transaction =
             (SqliteTransaction)await connection.BeginTransactionAsync(
                 cancellationToken);
 
-        foreach (var pending in pendingUsers)
+        await using (var insertUser = connection.CreateCommand())
         {
-            string userId = Guid.NewGuid().ToString("N");
-            string timestamp =
-                DateTimeOffset.UtcNow.ToString("O");
-
-            var user = new PosUser(
-                Id: userId,
-                Username: pending.Definition.Username,
-                DisplayName: pending.Definition.DisplayName,
-                Role: pending.Definition.Role);
-
-            string passwordHash =
-                _passwordHasher.HashPassword(
-                    user,
-                    pending.Password);
-
-            await using var insertUser =
-                connection.CreateCommand();
-
             insertUser.Transaction = transaction;
-
             insertUser.CommandText =
             """
             INSERT INTO users
@@ -156,58 +117,39 @@ public sealed class InitialUserSeeder
                 $username,
                 $usernameNormalized,
                 $displayName,
-                $role,
+                'admin',
                 $passwordHash,
                 1,
                 0,
                 NULL,
                 1,
                 NULL,
-                $createdAt,
-                $updatedAt
+                $timestamp,
+                $timestamp
             );
             """;
 
-            insertUser.Parameters.AddWithValue(
-                "$id",
-                user.Id);
-
-            insertUser.Parameters.AddWithValue(
-                "$username",
-                user.Username);
-
+            insertUser.Parameters.AddWithValue("$id", user.Id);
+            insertUser.Parameters.AddWithValue("$username", user.Username);
             insertUser.Parameters.AddWithValue(
                 "$usernameNormalized",
-                NormalizeUsername(user.Username));
-
+                user.Username.ToUpperInvariant());
             insertUser.Parameters.AddWithValue(
                 "$displayName",
                 user.DisplayName);
-
-            insertUser.Parameters.AddWithValue(
-                "$role",
-                user.Role);
-
             insertUser.Parameters.AddWithValue(
                 "$passwordHash",
                 passwordHash);
-
             insertUser.Parameters.AddWithValue(
-                "$createdAt",
+                "$timestamp",
                 timestamp);
 
-            insertUser.Parameters.AddWithValue(
-                "$updatedAt",
-                timestamp);
+            await insertUser.ExecuteNonQueryAsync(cancellationToken);
+        }
 
-            await insertUser.ExecuteNonQueryAsync(
-                cancellationToken);
-
-            await using var audit =
-                connection.CreateCommand();
-
+        await using (var audit = connection.CreateCommand())
+        {
             audit.Transaction = transaction;
-
             audit.CommandText =
             """
             INSERT INTO audit_logs
@@ -224,7 +166,7 @@ public sealed class InitialUserSeeder
             )
             VALUES
             (
-                $occurredAt,
+                $timestamp,
                 $userId,
                 $username,
                 'user.bootstrap.created',
@@ -236,64 +178,45 @@ public sealed class InitialUserSeeder
             );
             """;
 
-            audit.Parameters.AddWithValue(
-                "$occurredAt",
-                timestamp);
-
-            audit.Parameters.AddWithValue(
-                "$userId",
-                user.Id);
-
-            audit.Parameters.AddWithValue(
-                "$username",
-                user.Username);
-
+            audit.Parameters.AddWithValue("$timestamp", timestamp);
+            audit.Parameters.AddWithValue("$userId", user.Id);
+            audit.Parameters.AddWithValue("$username", user.Username);
             audit.Parameters.AddWithValue(
                 "$details",
                 JsonSerializer.Serialize(new
                 {
                     user.DisplayName,
                     user.Role,
-                    mustChangePassword = true
+                    mustChangePassword = true,
+                    tellerAccountsCreated = 0
                 }));
 
-            await audit.ExecuteNonQueryAsync(
-                cancellationToken);
+            await audit.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await transaction.CommitAsync(cancellationToken);
     }
 
-    private static string NormalizeUsername(
-        string username)
+    private static void ValidateUsername(string username)
     {
-        return username.Trim().ToUpperInvariant();
-    }
-
-    private static void ValidatePassword(
-        string username,
-        string password)
-    {
-        bool valid =
-            password.Length >= 12 &&
-            password.Any(char.IsUpper) &&
-            password.Any(char.IsLower) &&
-            password.Any(char.IsDigit) &&
-            password.Any(character =>
-                !char.IsLetterOrDigit(character));
-
-        if (!valid)
+        if (username.Length is < 3 or > 50 ||
+            username.Any(character =>
+                !(char.IsLetterOrDigit(character) ||
+                  character is '.' or '_' or '-')))
         {
             throw new InvalidOperationException(
-                $"The initial password for '{username}' must contain " +
-                "at least 12 characters, uppercase, lowercase, " +
-                "a number and a symbol.");
+                "The first administrator username must contain 3 to 50 " +
+                "letters, numbers, dots, underscores or hyphens.");
         }
     }
 
-    private sealed record BootstrapUser(
-        string Username,
-        string DisplayName,
-        string Role,
-        string PasswordEnvironmentVariable);
+    private static void ValidateDisplayName(string displayName)
+    {
+        if (displayName.Length is < 2 or > 100)
+        {
+            throw new InvalidOperationException(
+                "The first administrator display name must contain " +
+                "between 2 and 100 characters.");
+        }
+    }
 }

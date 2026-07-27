@@ -25,9 +25,11 @@ builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<SessionService>();
 builder.Services.AddSingleton<PasswordChangeService>();
 builder.Services.AddSingleton<AdminTellerResetService>();
+builder.Services.AddSingleton<UserAdministrationService>();
 builder.Services.AddSingleton<InventoryService>();
 builder.Services.AddSingleton<AuditDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
+builder.Services.AddSingleton<SaleVoidService>();
 builder.Services.AddSingleton<BusinessOperationsService>();
 builder.Services.AddSingleton<SystemAdministrationService>();
 
@@ -72,9 +74,9 @@ app.Use(async (context, next) =>
 
 app.MapGet("/api/v3/service", () => Results.Ok(new
 {
-    application = "ROBO CASK & TAP POS",
+    application = "Nexus POS",
     service = "Production Server",
-    version = "3.0.0-dev",
+    version = "4.0.0",
     status = "running"
 }));
 
@@ -87,15 +89,21 @@ app.MapGet(
         DatabaseStatus status =
             await db.GetStatusAsync(cancellationToken);
 
+        string instanceId =
+            Environment.GetEnvironmentVariable("NEXUS_INSTANCE_ID")
+            ?? Environment.GetEnvironmentVariable("ROBO_INSTANCE_ID")
+            ?? string.Empty;
+
         return Results.Ok(new
         {
             ok = true,
-            application = "ROBO CASK & TAP POS",
-            version = "3.0.0-dev",
+            application = "Nexus POS",
+            version = "4.0.0",
+            instanceId,
+            schemaVersion = status.SchemaVersion,
             database = status
         });
     });
-
 
 app.MapPost(
     "/api/v3/auth/login",
@@ -110,7 +118,6 @@ app.MapPost(
             request.Password,
             http.Request.Headers.UserAgent.ToString(),
             cancellationToken);
-
         if (result.Status == LoginStatus.Success &&
             result.User is not null &&
             result.SessionToken is not null &&
@@ -172,6 +179,7 @@ app.MapPost(
 app.MapSessionEndpoints();
 app.MapPasswordEndpoints();
 app.MapAdminTellerResetEndpoints();
+app.MapUserAdministrationEndpoints();
 app.MapInventoryEndpoints();
 app.MapSalesEndpoints();
 app.MapAdminReferenceEndpoints();

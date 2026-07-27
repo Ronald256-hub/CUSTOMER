@@ -38,7 +38,6 @@ if (-not (Test-Path -LiteralPath $sourceDirectory -PathType Container)) {
     throw "Source directory was not found: $sourceDirectory"
 }
 
-# Fix the receipt/invoice HTML quoting defect found by the Windows compiler.
 Get-ChildItem $sourceDirectory -Filter "AuditDocumentWriter.cs" -Recurse -File |
     ForEach-Object {
         $content = Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8
@@ -51,7 +50,6 @@ Get-ChildItem $sourceDirectory -Filter "AuditDocumentWriter.cs" -Recurse -File |
         }
     }
 
-# DELETE handlers with complex JSON requests require explicit body binding.
 $requestTypes = @(
     "DeleteUserRequest",
     "DeactivateCategoryRequest",
@@ -169,10 +167,38 @@ if (Test-Path -LiteralPath $smokeTest -PathType Leaf) {
         'Write-Error "Nexus POS automated release smoke test: FAIL - $($_.Exception.Message)"',
         'Write-Host "Nexus POS automated release smoke test: FAIL - $($_.Exception.Message)" -ForegroundColor Red'
     )
+    $content = $content.Replace(
+        'currencyCode = "USD"',
+        'currencyCode = "UGX"'
+    )
+    $content = $content.Replace(
+        '$settings.currencyCode -ne "USD"',
+        '$settings.currencyCode -ne "UGX"'
+    )
+
+    $oldRequest = '    $response = Invoke-WebRequest @parameters'
+    $newRequest = @'
+    try
+    {
+        $response = Invoke-WebRequest @parameters
+    }
+    catch
+    {
+        throw "$Method $Uri failed: $($_.Exception.Message)"
+    }
+'@
+
+    if ($content.Contains($oldRequest) -and
+        -not $content.Contains('$Method $Uri failed:')) {
+        $content = $content.Replace(
+            $oldRequest,
+            $newRequest.TrimEnd()
+        )
+    }
 
     if ($content -ne $original) {
         Save-Utf8 $smokeTest $content
-        $changes.Add("Improved smoke-test startup allowance and diagnostics in $smokeTest")
+        $changes.Add("Improved smoke-test settings and endpoint diagnostics in $smokeTest")
     }
 }
 

@@ -66,8 +66,7 @@ jobs:
             'RELEASE_SMOKE_TEST.ps1',
             'release-engineering/BOOTSTRAP_WINDOWS_RELEASE.ps1',
             'release-engineering/INSTALL_BUILD_PREREQUISITES.ps1',
-            'release-engineering/INSTALL_NEXUS_POS.ps1',
-            'release-engineering/APPLY_ACCOUNTING_SETTINGS_FIXES.ps1'
+            'release-engineering/INSTALL_NEXUS_POS.ps1'
           )) {
             if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
               throw "Missing Windows entry point: $requiredFile"
@@ -110,8 +109,6 @@ jobs:
         run: |
           & 'release-engineering/APPLY_KNOWN_WINDOWS_BUILD_FIXES.ps1' -SourceRoot $PWD
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & 'release-engineering/APPLY_ACCOUNTING_SETTINGS_FIXES.ps1' -SourceRoot $PWD
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build, publish and smoke-test complete Windows release
         id: release_build
@@ -141,8 +138,6 @@ jobs:
           path: |
             windows-release-build.log
             release/smoke-diagnostics-*/**
-            src/Robo.Pos.Server/Administration/SystemAdministrationModels.cs
-            src/Robo.Pos.Server/Administration/SystemAdministrationService.cs
           if-no-files-found: warn
           retention-days: 7
 

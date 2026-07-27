@@ -102,6 +102,10 @@ public sealed class DatabaseBootstrap
         await ShopScopedSalesMigration.ApplyAsync(
             connection,
             cancellationToken);
+
+        await StockTransferWorkflowMigration.ApplyAsync(
+            connection,
+            cancellationToken);
     }
 
     public async Task<DatabaseStatus> GetStatusAsync(

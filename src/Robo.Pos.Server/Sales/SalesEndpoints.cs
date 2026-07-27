@@ -154,6 +154,45 @@ public static class SalesEndpoints
                 }
             });
 
+        app.MapPost(
+            "/api/v3/admin/sales/{saleId}/void",
+            async Task<IResult> (
+                string saleId,
+                VoidSaleRequest request,
+                HttpContext http,
+                SessionService sessions,
+                SaleVoidService saleVoids,
+                CancellationToken cancellationToken) =>
+            {
+                EndpointAccessDecision access =
+                    await EndpointAccessControl
+                        .RequireAdminAsync(
+                            http,
+                            sessions,
+                            cancellationToken);
+
+                if (!access.IsAllowed)
+                {
+                    return access.Failure!;
+                }
+
+                try
+                {
+                    VoidSaleResult result =
+                        await saleVoids.VoidAsync(
+                            access.User!,
+                            saleId,
+                            request,
+                            cancellationToken);
+
+                    return Results.Ok(result);
+                }
+                catch (SalesException exception)
+                {
+                    return Error(exception);
+                }
+            });
+
         app.MapGet(
             "/api/v3/receipts",
             async Task<IResult> (
@@ -197,6 +236,7 @@ public static class SalesEndpoints
                 HttpContext http,
                 SessionService sessions,
                 SalesService sales,
+                SaleVoidService saleVoids,
                 CancellationToken cancellationToken) =>
             {
                 EndpointAccessDecision access =
@@ -219,7 +259,37 @@ public static class SalesEndpoints
                             saleId,
                             cancellationToken);
 
-                    return Results.Ok(receipt);
+                    SaleVoidMetadata? voidMetadata =
+                        await saleVoids.GetMetadataAsync(
+                            saleId,
+                            cancellationToken);
+
+                    return Results.Ok(new
+                    {
+                        receipt.SaleId,
+                        receipt.ReceiptNumber,
+                        receipt.InvoiceNumber,
+                        receipt.TellerName,
+                        receipt.Status,
+                        receipt.CustomerName,
+                        receipt.CustomerPhone,
+                        receipt.CustomerAddress,
+                        receipt.CustomerTaxNumber,
+                        receipt.SubtotalMinor,
+                        receipt.DiscountMinor,
+                        receipt.TotalMinor,
+                        receipt.AmountReceivedMinor,
+                        receipt.ChangeMinor,
+                        receipt.PaymentMethod,
+                        receipt.Notes,
+                        receipt.CompletedAtUtc,
+                        receipt.Items,
+                        receipt.Documents,
+                        voidReason = voidMetadata?.VoidReason,
+                        voidedAtUtc = voidMetadata?.VoidedAtUtc,
+                        voidedByDisplayName =
+                            voidMetadata?.VoidedByDisplayName
+                    });
                 }
                 catch (SalesException exception)
                 {

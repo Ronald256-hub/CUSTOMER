@@ -68,7 +68,8 @@ jobs:
             'release-engineering/INSTALL_BUILD_PREREQUISITES.ps1',
             'release-engineering/INSTALL_NEXUS_POS.ps1',
             'release-engineering/VERIFY_SHOP_SCOPED_INVENTORY.ps1',
-            'release-engineering/VERIFY_SHOP_SCOPED_SALES.ps1'
+            'release-engineering/VERIFY_SHOP_SCOPED_SALES.ps1',
+            'release-engineering/VERIFY_STOCK_TRANSFER_WORKFLOW.ps1'
           )) {
             if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
               throw "Missing Windows entry point: $requiredFile"
@@ -193,6 +194,44 @@ jobs:
           if ($env:SHOP_SALES_GATE_EXIT_CODE -ne '0') {
             Get-Content 'shop-sales-gate.log' -Tail 350 -ErrorAction SilentlyContinue
             throw "Shop-scoped shifts, receipts and reports gate failed with exit code $env:SHOP_SALES_GATE_EXIT_CODE."
+          }
+
+      - name: Run inter-shop stock transfer workflow gate
+        id: stock_transfer_gate
+        shell: pwsh
+        run: |
+          $exitCode = 0
+          try {
+            & 'release-engineering/VERIFY_STOCK_TRANSFER_WORKFLOW.ps1' *>&1 |
+              Tee-Object -FilePath 'stock-transfer-gate.log'
+            $exitCode = 0
+          }
+          catch {
+            $_ | Out-String |
+              Tee-Object -FilePath 'stock-transfer-gate.log' -Append
+            $exitCode = 1
+          }
+
+          "STOCK_TRANSFER_GATE_EXIT_CODE=$exitCode" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Stock transfer gate exit code: $exitCode"
+          exit 0
+
+      - name: Upload stock transfer gate diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-pos-stock-transfer-gate-diagnostics
+          path: stock-transfer-gate.log
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce stock transfer workflow result
+        shell: pwsh
+        run: |
+          if ($env:STOCK_TRANSFER_GATE_EXIT_CODE -ne '0') {
+            Get-Content 'stock-transfer-gate.log' -Tail 400 -ErrorAction SilentlyContinue
+            throw "Inter-shop stock transfer workflow gate failed with exit code $env:STOCK_TRANSFER_GATE_EXIT_CODE."
           }
 
       - name: Verify release artifacts

@@ -20,33 +20,53 @@ public static class CrmCustomerManagementMigration
         """;
         check.Parameters.AddWithValue("$version", Version);
 
-        int alreadyApplied = Convert.ToInt32(
-            await check.ExecuteScalarAsync(cancellationToken));
-        if (alreadyApplied > 0)
+        bool alreadyApplied = Convert.ToInt32(
+            await check.ExecuteScalarAsync(cancellationToken)) > 0;
+        string hardeningSql = await LoadSqlAsync(
+            "014_crm_customer_management_hardening.sql",
+            cancellationToken);
+
+        if (alreadyApplied)
         {
+            await using var hardening = connection.CreateCommand();
+            hardening.CommandText = hardeningSql;
+            await hardening.ExecuteNonQueryAsync(cancellationToken);
             return;
         }
 
+        string migrationSql = await LoadSqlAsync(
+            "014_crm_customer_management.sql",
+            cancellationToken);
+
+        await using var transaction =
+            (SqliteTransaction)await connection.BeginTransactionAsync(
+                cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = migrationSql;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        await using var hardeningCommand = connection.CreateCommand();
+        hardeningCommand.Transaction = transaction;
+        hardeningCommand.CommandText = hardeningSql;
+        await hardeningCommand.ExecuteNonQueryAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    private static async Task<string> LoadSqlAsync(
+        string fileName,
+        CancellationToken cancellationToken)
+    {
         Assembly assembly = typeof(CrmCustomerManagementMigration).Assembly;
         string resourceName = assembly
             .GetManifestResourceNames()
-            .Single(name => name.EndsWith(
-                "014_crm_customer_management.sql",
-                StringComparison.Ordinal));
+            .Single(name => name.EndsWith(fileName, StringComparison.Ordinal));
 
         await using Stream stream =
             assembly.GetManifestResourceStream(resourceName)
             ?? throw new InvalidOperationException(
-                "The CRM customer management migration resource was not found.");
+                $"The CRM migration resource {fileName} was not found.");
         using var reader = new StreamReader(stream);
-        string sql = await reader.ReadToEndAsync(cancellationToken);
-
-        await using var transaction =
-            (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = sql;
-        await command.ExecuteNonQueryAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        return await reader.ReadToEndAsync(cancellationToken);
     }
 }

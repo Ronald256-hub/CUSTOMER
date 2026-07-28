@@ -41,6 +41,9 @@ public sealed class InitialUserSeeder
 
             if (existingUsers > 0)
             {
+                await EnsureCrmLoyaltySettingsAsync(
+                    connection,
+                    cancellationToken);
                 return;
             }
         }
@@ -195,6 +198,71 @@ public sealed class InitialUserSeeder
         }
 
         await transaction.CommitAsync(cancellationToken);
+        await EnsureCrmLoyaltySettingsAsync(
+            connection,
+            cancellationToken);
+    }
+
+    private static async Task EnsureCrmLoyaltySettingsAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        string? administratorId;
+        await using (var administrator = connection.CreateCommand())
+        {
+            administrator.CommandText =
+            """
+            SELECT id
+            FROM users
+            WHERE role = 'admin'
+              AND is_active = 1
+            ORDER BY created_at_utc, id
+            LIMIT 1;
+            """;
+            administratorId = Convert.ToString(
+                await administrator.ExecuteScalarAsync(cancellationToken));
+        }
+
+        if (string.IsNullOrWhiteSpace(administratorId))
+        {
+            throw new InvalidOperationException(
+                "CRM initialization requires an active administrator account.");
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+        """
+        INSERT OR IGNORE INTO crm_loyalty_settings
+        (
+            organization_id,
+            is_enabled,
+            spend_minor_per_point,
+            minimum_redeem_points,
+            silver_threshold_points,
+            gold_threshold_points,
+            platinum_threshold_points,
+            version,
+            updated_by_user_id,
+            created_at_utc,
+            updated_at_utc
+        )
+        SELECT
+            organization.id,
+            0,
+            1000,
+            1,
+            100,
+            500,
+            1000,
+            1,
+            $administratorId,
+            $now,
+            $now
+        FROM organizations AS organization;
+        """;
+        command.Parameters.AddWithValue("$administratorId", administratorId);
+        command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static void ValidateUsername(string username)

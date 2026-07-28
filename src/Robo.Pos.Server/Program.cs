@@ -1,6 +1,7 @@
 using Robo.Pos.Server.Accounting;
 using Robo.Pos.Server.Finance;
 using Robo.Pos.Server.Procurement;
+using Robo.Pos.Server.Crm;
 using Robo.Pos.Server.Business;
 using Robo.Pos.Server.Administration;
 using Robo.Pos.Server.Sales;
@@ -39,6 +40,7 @@ builder.Services.AddSingleton<StockTransferAuditService>();
 builder.Services.AddSingleton<AccountingService>();
 builder.Services.AddSingleton<FinanceService>();
 builder.Services.AddSingleton<ProcurementService>();
+builder.Services.AddSingleton<CrmService>();
 builder.Services.AddSingleton<AuditDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
 builder.Services.AddSingleton<ShopSalesService>();
@@ -94,7 +96,7 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
 {
     application = "Nexus POS",
     service = "Production Server",
-    version = "5.7.0",
+    version = "5.8.0",
     status = "running",
     capabilities = new[]
     {
@@ -144,7 +146,19 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
         "audited-supplier-return-credits",
         "approved-branch-stock-counts",
         "reorder-policy-and-recommendations",
-        "procurement-performance-reporting"
+        "procurement-performance-reporting",
+        "unified-finance-and-crm-customer-master",
+        "customer-lifecycle-and-tagging",
+        "audited-customer-communications",
+        "assigned-follow-up-tasks",
+        "configurable-loyalty-programme",
+        "automatic-sale-loyalty-accrual",
+        "automatic-sale-void-loyalty-reversal",
+        "controlled-loyalty-redemption",
+        "branch-numbered-customer-quotations",
+        "quotation-to-sale-reconciliation",
+        "customer-commercial-timeline",
+        "customer-segmentation-and-dashboard"
     }
 }));
 
@@ -166,7 +180,7 @@ app.MapGet(
         {
             ok = true,
             application = "Nexus POS",
-            version = "5.7.0",
+            version = "5.8.0",
             instanceId,
             schemaVersion = status.SchemaVersion,
             database = status
@@ -256,6 +270,7 @@ app.MapStockTransferAuditEndpoints();
 app.MapAccountingEndpoints();
 app.MapFinanceEndpoints();
 app.MapProcurementEndpoints();
+app.MapCrmEndpoints();
 app.MapSalesEndpoints();
 app.MapAdminReferenceEndpoints();
 app.MapBusinessOperationsEndpoints();

@@ -1,0 +1,65 @@
+name: Apply CRM loyalty settings seed fix
+
+on:
+  push:
+    branches:
+      - agent/crm-customer-management
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: ${{ !contains(github.event.head_commit.message, '[crm-loyalty-seed]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/crm-customer-management
+          fetch-depth: 0
+
+      - name: Make fresh-install loyalty settings independent of user seeding
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/Robo.Pos.Server/Data/Migrations/014_crm_customer_management.sql')
+          text = path.read_text(encoding='utf-8')
+
+          old_column = '    updated_by_user_id        TEXT NOT NULL,\n'
+          new_column = '    updated_by_user_id        TEXT NULL,\n'
+          if text.count(old_column) != 1:
+              raise SystemExit(f'loyalty updater column: expected one match, found {text.count(old_column)}')
+          text = text.replace(old_column, new_column)
+
+          old_seed = '''    1,
+              COALESCE(
+                  (SELECT id FROM users WHERE role = 'admin' ORDER BY created_at_utc LIMIT 1),
+                  (SELECT id FROM users ORDER BY created_at_utc LIMIT 1)
+              ),
+              strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+              strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+          FROM organizations AS organization
+          WHERE EXISTS (SELECT 1 FROM users);'''
+          new_seed = '''    1,
+              NULL,
+              strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+              strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+          FROM organizations AS organization;'''
+          if text.count(old_seed) != 1:
+              raise SystemExit(f'loyalty settings seed: expected one match, found {text.count(old_seed)}')
+          path.write_text(text.replace(old_seed, new_seed), encoding='utf-8')
+
+          Path('.github/workflows/crm-loyalty-seed-fix.yml').unlink()
+          PY
+
+      - name: Commit loyalty settings seed correction
+        shell: bash
+        run: |
+          git config user.name "Nexus CRM Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Seed CRM loyalty settings before user bootstrap [crm-loyalty-seed]"
+          git push origin HEAD:agent/crm-customer-management

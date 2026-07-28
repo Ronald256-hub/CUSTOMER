@@ -918,7 +918,7 @@ public sealed partial class FinanceService
                 item.document_number AS reference,
                 CASE WHEN item.supplier_invoice_number = ''
                      THEN 'Supplier purchase'
-                     ELSE 'Supplier invoice ' || item.supplier_invoice_number END,
+                     ELSE 'Supplier invoice ' || item.supplier_invoice_number END AS description,
                 0 AS debit_minor,
                 item.original_amount_minor AS credit_minor,
                 shop.code AS shop_code,

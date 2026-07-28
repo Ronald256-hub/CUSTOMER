@@ -3,6 +3,10 @@ using Microsoft.Data.Sqlite;
 
 namespace Robo.Pos.Server.Data;
 
+/// <summary>
+/// Applies the customer, receivable, payable, settlement and cashbook schema
+/// as one transaction after the operational accounting foundation is ready.
+/// </summary>
 public static class FinanceSettlementMigration
 {
     public const int Version = 12;

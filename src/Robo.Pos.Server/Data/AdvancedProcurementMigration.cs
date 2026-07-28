@@ -6,8 +6,8 @@ namespace Robo.Pos.Server.Data;
 /// <summary>
 /// Applies the audited procurement, receiving, batch, return, reorder and
 /// stock-count schema as one transaction after the finance foundation. The
-/// migration is additive, repeat-safe and leaves earlier operational records
-/// intact.
+/// migration is additive, repeat-safe, preserves earlier records and makes no
+/// destructive changes to operational balances.
 /// </summary>
 public static class AdvancedProcurementMigration
 {

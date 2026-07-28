@@ -19,23 +19,25 @@ jobs:
           fetch-depth: 0
 
       - name: Correct exact supplier statement projection
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
           path = Path('src/Robo.Pos.Server/Finance/FinanceReportingService.cs')
           text = path.read_text(encoding='utf-8')
-          old = '''                CASE WHEN item.supplier_invoice_number = ''
-                     THEN 'Supplier purchase'
-                     ELSE 'Supplier invoice ' || item.supplier_invoice_number END,
-                0 AS debit_minor,'''
-          new = '''                CASE WHEN item.supplier_invoice_number = ''
-                     THEN 'Supplier purchase'
-                     ELSE 'Supplier invoice ' || item.supplier_invoice_number END AS description,
-                0 AS debit_minor,'''
+          old = """                CASE WHEN item.supplier_invoice_number = ''
+                       THEN 'Supplier purchase'
+                       ELSE 'Supplier invoice ' || item.supplier_invoice_number END,
+                  0 AS debit_minor,"""
+          new = """                CASE WHEN item.supplier_invoice_number = ''
+                       THEN 'Supplier purchase'
+                       ELSE 'Supplier invoice ' || item.supplier_invoice_number END AS description,
+                  0 AS debit_minor,"""
           if text.count(old) != 1:
               raise SystemExit(f'Expected one supplier statement projection, found {text.count(old)}')
           path.write_text(text.replace(old, new), encoding='utf-8')
           Path('.github/workflows/finance-statement-fix.yml').unlink()
+          PY
 
       - name: Commit fix
         shell: bash

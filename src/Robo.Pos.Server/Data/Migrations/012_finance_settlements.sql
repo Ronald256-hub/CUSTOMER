@@ -642,6 +642,9 @@ BEGIN
                AND item.organization_id = receipt.organization_id
                AND item.shop_id = receipt.shop_id
                AND item.customer_id = receipt.customer_id
+            INNER JOIN accounting_journals AS source_journal
+                ON source_journal.id = item.posting_journal_id
+               AND source_journal.status = 'posted'
             WHERE receipt.id = NEW.receipt_id
               AND receipt.status = 'draft'
         )
@@ -834,6 +837,9 @@ BEGIN
                AND item.organization_id = payment.organization_id
                AND item.shop_id = payment.shop_id
                AND item.supplier_id = payment.supplier_id
+            INNER JOIN accounting_journals AS source_journal
+                ON source_journal.id = item.posting_journal_id
+               AND source_journal.status = 'posted'
             WHERE payment.id = NEW.payment_id
               AND payment.status = 'draft'
         )

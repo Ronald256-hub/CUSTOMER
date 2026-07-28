@@ -476,39 +476,60 @@ public sealed partial class FinanceService
     }
 
     private async Task<FinanceSettlementRecord> GetSettlementAsync(
-        AuthenticatedUser user,
-        ActiveShopContextRecord context,
-        string settlementType,
-        string settlementId,
-        CancellationToken cancellationToken)
+    AuthenticatedUser user,
+    ActiveShopContextRecord context,
+    string settlementType,
+    string settlementId,
+    CancellationToken cancellationToken)
+{
+    await using var connection = new SqliteConnection(_database.ConnectionString);
+    await connection.OpenAsync(cancellationToken);
+    await RequireFinanceAccessAsync(
+        connection,
+        transaction: null,
+        user,
+        context.ShopId,
+        cancellationToken);
+
+    bool customerReceipt = settlementType == "customer_receipt";
+    string table = customerReceipt
+        ? "finance_customer_receipts"
+        : "finance_supplier_payments";
+    string counterpartyTable = customerReceipt
+        ? "finance_customers"
+        : "suppliers";
+    string counterpartyColumn = customerReceipt
+        ? "customer_id"
+        : "supplier_id";
+    string numberColumn = customerReceipt
+        ? "receipt_number"
+        : "payment_number";
+    string dateColumn = customerReceipt
+        ? "receipt_date"
+        : "payment_date";
+
+    string id;
+    string number;
+    string date;
+    string shopId;
+    string shopCode;
+    string counterpartyId;
+    string counterpartyName;
+    string paymentMethod;
+    long amountMinor;
+    string reference;
+    string notes;
+    string status;
+    string? postingJournalId;
+    string? reversalJournalId;
+    string createdByDisplayName;
+    DateTimeOffset createdAtUtc;
+    DateTimeOffset? postedAtUtc;
+    DateTimeOffset? reversedAtUtc;
+    string? reversalReason;
+
+    await using (var header = connection.CreateCommand())
     {
-        await using var connection = new SqliteConnection(_database.ConnectionString);
-        await connection.OpenAsync(cancellationToken);
-        await RequireFinanceAccessAsync(
-            connection,
-            transaction: null,
-            user,
-            context.ShopId,
-            cancellationToken);
-
-        bool customerReceipt = settlementType == "customer_receipt";
-        string table = customerReceipt
-            ? "finance_customer_receipts"
-            : "finance_supplier_payments";
-        string counterpartyTable = customerReceipt
-            ? "finance_customers"
-            : "suppliers";
-        string counterpartyColumn = customerReceipt
-            ? "customer_id"
-            : "supplier_id";
-        string numberColumn = customerReceipt
-            ? "receipt_number"
-            : "payment_number";
-        string dateColumn = customerReceipt
-            ? "receipt_date"
-            : "payment_date";
-
-        await using var header = connection.CreateCommand();
         header.CommandText =
             $"""
             SELECT
@@ -547,7 +568,8 @@ public sealed partial class FinanceService
         header.Parameters.AddWithValue("$organizationId", context.OrganizationId);
         header.Parameters.AddWithValue("$shopId", context.ShopId);
 
-        await using var reader = await header.ExecuteReaderAsync(cancellationToken);
+        await using var reader =
+            await header.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
         {
             throw NotFound(
@@ -555,64 +577,89 @@ public sealed partial class FinanceService
                 "The settlement could not be found in the active branch.");
         }
 
-        string allocationTable = customerReceipt
-            ? "finance_customer_receipt_allocations"
-            : "finance_supplier_payment_allocations";
-        string allocationParentColumn = customerReceipt
-            ? "receipt_id"
-            : "payment_id";
-        string allocationItemColumn = customerReceipt
-            ? "receivable_item_id"
-            : "payable_item_id";
-        string itemTable = customerReceipt
-            ? "finance_receivable_items"
-            : "finance_payable_items";
-
-        var allocations = new List<SettlementAllocationRecord>();
-        await using var allocationCommand = connection.CreateCommand();
-        allocationCommand.CommandText =
-            $"""
-            SELECT allocation.{allocationItemColumn}, item.document_number, allocation.amount_minor
-            FROM {allocationTable} AS allocation
-            INNER JOIN {itemTable} AS item
-                ON item.id = allocation.{allocationItemColumn}
-            WHERE allocation.{allocationParentColumn} = $settlementId
-            ORDER BY item.document_date, item.document_number;
-            """;
-        allocationCommand.Parameters.AddWithValue("$settlementId", settlementId);
-        await using var allocationReader =
-            await allocationCommand.ExecuteReaderAsync(cancellationToken);
-        while (await allocationReader.ReadAsync(cancellationToken))
-        {
-            allocations.Add(new SettlementAllocationRecord(
-                allocationReader.GetString(0),
-                allocationReader.GetString(1),
-                allocationReader.GetInt64(2)));
-        }
-
-        return new FinanceSettlementRecord(
-            reader.GetString(0),
-            settlementType,
-            reader.GetString(1),
-            reader.GetString(2),
-            reader.GetString(3),
-            reader.GetString(4),
-            reader.GetString(5),
-            reader.GetString(6),
-            reader.GetString(7),
-            reader.GetInt64(8),
-            reader.GetString(9),
-            reader.GetString(10),
-            reader.GetString(11),
-            reader.IsDBNull(12) ? null : reader.GetString(12),
-            reader.IsDBNull(13) ? null : reader.GetString(13),
-            reader.GetString(14),
-            DateTimeOffset.Parse(reader.GetString(15)),
-            reader.IsDBNull(16) ? null : DateTimeOffset.Parse(reader.GetString(16)),
-            reader.IsDBNull(17) ? null : DateTimeOffset.Parse(reader.GetString(17)),
-            reader.IsDBNull(18) ? null : reader.GetString(18),
-            allocations);
+        id = reader.GetString(0);
+        number = reader.GetString(1);
+        date = reader.GetString(2);
+        shopId = reader.GetString(3);
+        shopCode = reader.GetString(4);
+        counterpartyId = reader.GetString(5);
+        counterpartyName = reader.GetString(6);
+        paymentMethod = reader.GetString(7);
+        amountMinor = reader.GetInt64(8);
+        reference = reader.GetString(9);
+        notes = reader.GetString(10);
+        status = reader.GetString(11);
+        postingJournalId = reader.IsDBNull(12) ? null : reader.GetString(12);
+        reversalJournalId = reader.IsDBNull(13) ? null : reader.GetString(13);
+        createdByDisplayName = reader.GetString(14);
+        createdAtUtc = DateTimeOffset.Parse(reader.GetString(15));
+        postedAtUtc = reader.IsDBNull(16)
+            ? null
+            : DateTimeOffset.Parse(reader.GetString(16));
+        reversedAtUtc = reader.IsDBNull(17)
+            ? null
+            : DateTimeOffset.Parse(reader.GetString(17));
+        reversalReason = reader.IsDBNull(18) ? null : reader.GetString(18);
     }
+
+    string allocationTable = customerReceipt
+        ? "finance_customer_receipt_allocations"
+        : "finance_supplier_payment_allocations";
+    string allocationParentColumn = customerReceipt
+        ? "receipt_id"
+        : "payment_id";
+    string allocationItemColumn = customerReceipt
+        ? "receivable_item_id"
+        : "payable_item_id";
+    string itemTable = customerReceipt
+        ? "finance_receivable_items"
+        : "finance_payable_items";
+
+    var allocations = new List<SettlementAllocationRecord>();
+    await using var allocationCommand = connection.CreateCommand();
+    allocationCommand.CommandText =
+        $"""
+        SELECT allocation.{allocationItemColumn}, item.document_number, allocation.amount_minor
+        FROM {allocationTable} AS allocation
+        INNER JOIN {itemTable} AS item
+            ON item.id = allocation.{allocationItemColumn}
+        WHERE allocation.{allocationParentColumn} = $settlementId
+        ORDER BY item.document_date, item.document_number;
+        """;
+    allocationCommand.Parameters.AddWithValue("$settlementId", settlementId);
+    await using var allocationReader =
+        await allocationCommand.ExecuteReaderAsync(cancellationToken);
+    while (await allocationReader.ReadAsync(cancellationToken))
+    {
+        allocations.Add(new SettlementAllocationRecord(
+            allocationReader.GetString(0),
+            allocationReader.GetString(1),
+            allocationReader.GetInt64(2)));
+    }
+
+    return new FinanceSettlementRecord(
+        id,
+        settlementType,
+        number,
+        date,
+        shopId,
+        shopCode,
+        counterpartyId,
+        counterpartyName,
+        paymentMethod,
+        amountMinor,
+        reference,
+        notes,
+        status,
+        postingJournalId,
+        reversalJournalId,
+        createdByDisplayName,
+        createdAtUtc,
+        postedAtUtc,
+        reversedAtUtc,
+        reversalReason,
+        allocations);
+}
 
     private async Task<AgeingReport> GetAgeingAsync(
         AuthenticatedUser user,

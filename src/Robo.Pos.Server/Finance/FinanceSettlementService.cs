@@ -1171,6 +1171,9 @@ public sealed partial class FinanceService
                     0
                 )
             FROM finance_receivable_items AS item
+            INNER JOIN accounting_journals AS source_journal
+                ON source_journal.id = item.posting_journal_id
+               AND source_journal.status = 'posted'
             WHERE item.id = $itemId
               AND item.organization_id = $organizationId
               AND item.shop_id = $shopId
@@ -1226,6 +1229,9 @@ public sealed partial class FinanceService
                     0
                 )
             FROM finance_payable_items AS item
+            INNER JOIN accounting_journals AS source_journal
+                ON source_journal.id = item.posting_journal_id
+               AND source_journal.status = 'posted'
             WHERE item.id = $itemId
               AND item.organization_id = $organizationId
               AND item.shop_id = $shopId

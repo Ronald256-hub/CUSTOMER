@@ -15,7 +15,8 @@ public sealed class ShopSaleCompletionService
             "cash",
             "mobile_money",
             "card",
-            "bank"
+            "bank",
+            "credit"
         };
 
     private readonly DatabaseBootstrap _database;
@@ -46,10 +47,10 @@ public sealed class ShopSaleCompletionService
         {
             throw Validation(
                 "invalid_payment_method",
-                "Use cash, mobile money, card or bank.");
+                "Use cash, mobile money, card, bank or credit.");
         }
 
-        ValidateCustomer(request);
+        ValidateCustomer(request, paymentMethod);
 
         await using var connection =
             new SqliteConnection(_database.ConnectionString);
@@ -324,7 +325,9 @@ public sealed class ShopSaleCompletionService
             .ToList();
     }
 
-    private static void ValidateCustomer(CompleteSaleRequest request)
+    private static void ValidateCustomer(
+        CompleteSaleRequest request,
+        string paymentMethod)
     {
         ValidateLength(
             request.CustomerName,
@@ -351,6 +354,19 @@ public sealed class ShopSaleCompletionService
             500,
             "sale_notes_too_long",
             "Sale notes cannot exceed 500 characters.");
+        ValidateLength(
+            request.CustomerId,
+            100,
+            "customer_id_too_long",
+            "Customer identifier cannot exceed 100 characters.");
+
+        if (paymentMethod == "credit" &&
+            string.IsNullOrWhiteSpace(request.CustomerId))
+        {
+            throw Validation(
+                "credit_customer_required",
+                "Select an active customer account before completing a credit sale.");
+        }
 
         if (request.IssueInvoice &&
             string.IsNullOrWhiteSpace(request.CustomerName))
@@ -771,6 +787,7 @@ public sealed class ShopSaleCompletionService
             invoice_number,
             shift_id,
             teller_user_id,
+            customer_id,
             customer_name,
             customer_phone,
             customer_address,
@@ -793,6 +810,7 @@ public sealed class ShopSaleCompletionService
             $invoiceNumber,
             $shiftId,
             $userId,
+            $customerId,
             $customerName,
             $customerPhone,
             $customerAddress,
@@ -816,6 +834,11 @@ public sealed class ShopSaleCompletionService
             invoiceNumber ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("$shiftId", shiftId);
         command.Parameters.AddWithValue("$userId", user.Id);
+        command.Parameters.AddWithValue(
+            "$customerId",
+            string.IsNullOrWhiteSpace(request.CustomerId)
+                ? DBNull.Value
+                : request.CustomerId.Trim());
         command.Parameters.AddWithValue(
             "$customerName",
             request.CustomerName?.Trim() ?? string.Empty);

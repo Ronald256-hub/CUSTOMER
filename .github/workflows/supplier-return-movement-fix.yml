@@ -1,0 +1,58 @@
+name: Apply supplier return movement compatibility fix
+
+on:
+  push:
+    branches:
+      - agent/advanced-procurement-inventory
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: ${{ !contains(github.event.head_commit.message, '[supplier-return-movement]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/advanced-procurement-inventory
+          fetch-depth: 0
+
+      - name: Use the compatible stock movement category
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          service = Path('src/Robo.Pos.Server/Procurement/SupplierReturnService.cs')
+          text = service.read_text(encoding='utf-8')
+          old = '''                line.ReceiptLine.ProductId,
+                          "supplier_return",
+                          -line.Request.QuantityBaseUnits,'''
+          new = '''                line.ReceiptLine.ProductId,
+                          "adjustment",
+                          -line.Request.QuantityBaseUnits,'''
+          if text.count(old) != 1:
+              raise SystemExit(f'supplier return movement: expected one match, found {text.count(old)}')
+          service.write_text(text.replace(old, new), encoding='utf-8')
+
+          gate = Path('release-engineering/VERIFY_ADVANCED_PROCUREMENT.ps1')
+          text = gate.read_text(encoding='utf-8')
+          old_gate = '''    $returnMovements = @($movements.movements | Where-Object { $_.movementType -eq "supplier_return" })'''
+          new_gate = '''    $returnMovements = @($movements.movements | Where-Object { $_.movementType -eq "adjustment" -and $_.referenceType -eq "supplier_return" })'''
+          if text.count(old_gate) != 1:
+              raise SystemExit(f'supplier return gate filter: expected one match, found {text.count(old_gate)}')
+          gate.write_text(text.replace(old_gate, new_gate), encoding='utf-8')
+
+          Path('.github/workflows/supplier-return-movement-fix.yml').unlink()
+          PY
+
+      - name: Commit compatibility correction
+        shell: bash
+        run: |
+          git config user.name "Nexus Procurement Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Use compatible supplier return stock movement [supplier-return-movement]"
+          git push origin HEAD:agent/advanced-procurement-inventory

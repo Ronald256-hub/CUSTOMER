@@ -3,6 +3,10 @@ using Microsoft.Data.Sqlite;
 
 namespace Robo.Pos.Server.Data;
 
+/// <summary>
+/// Applies the audited procurement, receiving, batch, return, reorder and
+/// stock-count schema as one transaction after the finance foundation.
+/// </summary>
 public static class AdvancedProcurementMigration
 {
     public const int Version = 13;

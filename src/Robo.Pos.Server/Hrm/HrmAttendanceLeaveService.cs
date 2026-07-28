@@ -197,7 +197,7 @@ public sealed partial class HrmService
         await connection.OpenAsync(cancellationToken);
         await RequireReadAccessAsync(connection, null, user, context.ShopId, cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = AttendanceSelectSql +
+        command.CommandText = AttendanceSelectSql + "\n" +
         """
         WHERE attendance.organization_id = $organizationId
           AND attendance.shop_id = $shopId
@@ -527,7 +527,7 @@ public sealed partial class HrmService
         await connection.OpenAsync(cancellationToken);
         await RequireReadAccessAsync(connection, null, user, context.ShopId, cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = LeaveSelectSql +
+        command.CommandText = LeaveSelectSql + "\n" +
         """
         WHERE request.organization_id = $organizationId
           AND ($status = '' OR request.status = $status)

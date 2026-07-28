@@ -496,7 +496,7 @@ public sealed partial class HrmService
         }
         int limit = Math.Clamp(requestedLimit, 1, 2000);
         await using var command = connection.CreateCommand();
-        command.CommandText = EmployeeSelectSql +
+        command.CommandText = EmployeeSelectSql + "\n" +
         """
         WHERE employee.organization_id = $organizationId
           AND ($allShops = 1 OR employee.home_shop_id = $shopId OR EXISTS

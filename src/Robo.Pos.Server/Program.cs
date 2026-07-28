@@ -32,6 +32,7 @@ builder.Services.AddSingleton<ShopContextService>();
 builder.Services.AddSingleton<InventoryService>();
 builder.Services.AddSingleton<ShopInventoryService>();
 builder.Services.AddSingleton<StockTransferService>();
+builder.Services.AddSingleton<StockTransferAuditService>();
 builder.Services.AddSingleton<AuditDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
 builder.Services.AddSingleton<ShopSalesService>();
@@ -87,7 +88,7 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
 {
     application = "Nexus POS",
     service = "Production Server",
-    version = "5.4.0",
+    version = "5.4.1",
     status = "running",
     capabilities = new[]
     {
@@ -108,7 +109,9 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
         "stock-transfer-dispatch-and-transit",
         "partial-stock-transfer-receiving",
         "stock-transfer-discrepancy-audit",
-        "stock-transfer-reporting"
+        "stock-transfer-reporting",
+        "database-enforced-stock-transfer-state-machine",
+        "immutable-stock-transfer-line-audit"
     }
 }));
 
@@ -130,7 +133,7 @@ app.MapGet(
         {
             ok = true,
             application = "Nexus POS",
-            version = "5.4.0",
+            version = "5.4.1",
             instanceId,
             schemaVersion = status.SchemaVersion,
             database = status
@@ -216,6 +219,7 @@ app.MapShopEndpoints();
 app.MapShopContextEndpoints();
 app.MapInventoryEndpoints();
 app.MapStockTransferEndpoints();
+app.MapStockTransferAuditEndpoints();
 app.MapSalesEndpoints();
 app.MapAdminReferenceEndpoints();
 app.MapBusinessOperationsEndpoints();

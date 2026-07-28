@@ -1,0 +1,44 @@
+name: Apply stock count account key correction
+
+on:
+  push:
+    branches:
+      - agent/advanced-procurement-inventory
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: ${{ !contains(github.event.head_commit.message, '[stock-count-account-key]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/advanced-procurement-inventory
+          fetch-depth: 0
+
+      - name: Align stock count loss account key
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/Robo.Pos.Server/Procurement/InventoryPlanningService.cs')
+          text = path.read_text(encoding='utf-8')
+          old = '''            connection, transaction, context.OrganizationId, "inventory_loss_damage", cancellationToken);'''
+          new = '''            connection, transaction, context.OrganizationId, "inventory_loss", cancellationToken);'''
+          if text.count(old) != 1:
+              raise SystemExit(f'inventory loss key: expected one match, found {text.count(old)}')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          Path('.github/workflows/stock-count-account-key-fix.yml').unlink()
+          PY
+
+      - name: Commit account key correction
+        shell: bash
+        run: |
+          git config user.name "Nexus Procurement Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Align stock count loss account key [stock-count-account-key]"
+          git push origin HEAD:agent/advanced-procurement-inventory

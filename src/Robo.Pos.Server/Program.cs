@@ -119,7 +119,12 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
         "immutable-posted-ledger",
         "audited-journal-reversals",
         "accounting-period-closing-controls",
-        "shop-and-consolidated-trial-balance"
+        "shop-and-consolidated-trial-balance",
+        "atomic-sale-ledger-posting",
+        "atomic-purchase-ledger-posting",
+        "atomic-expense-ledger-posting",
+        "automatic-operational-reversals",
+        "immutable-operational-accounting-links"
     }
 }));
 

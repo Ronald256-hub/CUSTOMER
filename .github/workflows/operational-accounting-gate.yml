@@ -5,7 +5,7 @@ on:
     paths:
       - 'BUILD_WINDOWS_RELEASE.ps1'
       - 'RELEASE_SMOKE_TEST.ps1'
-      - 'release-engineering/VERIFY_OPERATIONAL_ACCOUNTING.ps1'
+      - 'release-engineering/**'
       - 'src/**'
       - '.github/workflows/operational-accounting-gate.yml'
   workflow_dispatch:
@@ -43,6 +43,12 @@ jobs:
             }
             throw ($details -join "`n")
           }
+
+      - name: Apply verified source and build corrections
+        shell: pwsh
+        run: |
+          & 'release-engineering/APPLY_KNOWN_WINDOWS_BUILD_FIXES.ps1' -SourceRoot $PWD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build and smoke-test Windows release
         shell: pwsh

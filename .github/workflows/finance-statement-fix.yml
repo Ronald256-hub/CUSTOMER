@@ -18,24 +18,20 @@ jobs:
           ref: agent/receivables-payables-cashbook
           fetch-depth: 0
 
-      - name: Correct exact supplier statement projection
+      - name: Correct supplier statement projection
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
+
           path = Path('src/Robo.Pos.Server/Finance/FinanceReportingService.cs')
           text = path.read_text(encoding='utf-8')
-          old = """                CASE WHEN item.supplier_invoice_number = ''
-                       THEN 'Supplier purchase'
-                       ELSE 'Supplier invoice ' || item.supplier_invoice_number END,
-                  0 AS debit_minor,"""
-          new = """                CASE WHEN item.supplier_invoice_number = ''
-                       THEN 'Supplier purchase'
-                       ELSE 'Supplier invoice ' || item.supplier_invoice_number END AS description,
-                  0 AS debit_minor,"""
-          if text.count(old) != 1:
-              raise SystemExit(f'Expected one supplier statement projection, found {text.count(old)}')
-          path.write_text(text.replace(old, new), encoding='utf-8')
+          pattern = r"(ELSE 'Supplier invoice ' \|\| item\.supplier_invoice_number END)(,\s*\n\s*0 AS debit_minor,)"
+          updated, count = re.subn(pattern, r"\1 AS description\2", text, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected one supplier statement projection, found {count}')
+          path.write_text(updated, encoding='utf-8')
           Path('.github/workflows/finance-statement-fix.yml').unlink()
           PY
 

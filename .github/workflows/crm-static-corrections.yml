@@ -1,0 +1,59 @@
+name: Apply CRM static corrections
+
+on:
+  push:
+    branches:
+      - agent/crm-customer-management
+
+permissions:
+  contents: write
+
+jobs:
+  apply-corrections:
+    if: ${{ !contains(github.event.head_commit.message, '[crm-static-corrections]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/crm-customer-management
+          fetch-depth: 0
+
+      - name: Correct CRM exception and analytics mapping
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          models = Path('src/Robo.Pos.Server/Crm/CrmModels.cs')
+          text = models.read_text(encoding='utf-8')
+          old = 'public sealed record CrmException : Exception'
+          new = 'public sealed class CrmException : Exception'
+          if text.count(old) != 1:
+              raise SystemExit(f'CRM exception declaration: expected one match, found {text.count(old)}')
+          models.write_text(text.replace(old, new), encoding='utf-8')
+
+          service = Path('src/Robo.Pos.Server/Crm/CrmService.cs')
+          text = service.read_text(encoding='utf-8')
+          old = '''                reader.GetInt64(40),
+                          reader.GetInt64(41),
+                          reader.GetInt64(42),
+                          reader.GetString(43)));'''
+          new = '''                reader.GetInt64(40),
+                          reader.GetInt64(41),
+                          reader.GetString(42)));'''
+          if text.count(old) != 1:
+              raise SystemExit(f'customer analytics mapping: expected one match, found {text.count(old)}')
+          service.write_text(text.replace(old, new), encoding='utf-8')
+
+          Path('.github/workflows/crm-static-corrections.yml').unlink()
+          PY
+
+      - name: Commit CRM corrections
+        shell: bash
+        run: |
+          git config user.name "Nexus CRM Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Correct CRM exception and analytics mapping [crm-static-corrections]"
+          git push origin HEAD:agent/crm-customer-management

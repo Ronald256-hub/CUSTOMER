@@ -1,0 +1,322 @@
+name: Apply finance integration patch
+
+on:
+  push:
+    branches:
+      - agent/receivables-payables-cashbook
+
+permissions:
+  contents: write
+
+jobs:
+  apply-finance-patch:
+    if: ${{ !contains(github.event.head_commit.message, '[finance-autopatch]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/receivables-payables-cashbook
+          fetch-depth: 0
+
+      - name: Apply exact integration edits
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_exact(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              actual = text.count(old)
+              if actual != count:
+                  raise SystemExit(f'{path}: expected {count} matches, found {actual}')
+              p.write_text(text.replace(old, new, count), encoding='utf-8')
+
+          replace_exact(
+              'src/Robo.Pos.Server/Sales/SalesModels.cs',
+              '    string? CustomerTaxNumber = null,\n    string? Notes = null);',
+              '    string? CustomerTaxNumber = null,\n    string? Notes = null,\n    string? CustomerId = null);')
+
+          sales = 'src/Robo.Pos.Server/Sales/ShopSaleCompletionService.cs'
+          replace_exact(
+              sales,
+              '            "card",\n            "bank"\n        };',
+              '            "card",\n            "bank",\n            "credit"\n        };')
+          replace_exact(
+              sales,
+              '                "Use cash, mobile money, card or bank.");',
+              '                "Use cash, mobile money, card, bank or credit.");')
+          replace_exact(
+              sales,
+              '        ValidateCustomer(request);',
+              '        ValidateCustomer(request, paymentMethod);')
+          replace_exact(
+              sales,
+              '    private static void ValidateCustomer(CompleteSaleRequest request)\n    {',
+              '    private static void ValidateCustomer(\n        CompleteSaleRequest request,\n        string paymentMethod)\n    {')
+          replace_exact(
+              sales,
+              '        ValidateLength(\n            request.Notes,\n            500,\n            "sale_notes_too_long",\n            "Sale notes cannot exceed 500 characters.");\n\n        if (request.IssueInvoice &&',
+              '        ValidateLength(\n            request.Notes,\n            500,\n            "sale_notes_too_long",\n            "Sale notes cannot exceed 500 characters.");\n        ValidateLength(\n            request.CustomerId,\n            100,\n            "customer_id_too_long",\n            "Customer identifier cannot exceed 100 characters.");\n\n        if (paymentMethod == "credit" &&\n            string.IsNullOrWhiteSpace(request.CustomerId))\n        {\n            throw Validation(\n                "credit_customer_required",\n                "Select an active customer account before completing a credit sale.");\n        }\n\n        if (request.IssueInvoice &&')
+          replace_exact(
+              sales,
+              '            teller_user_id,\n            customer_name,',
+              '            teller_user_id,\n            customer_id,\n            customer_name,')
+          replace_exact(
+              sales,
+              '            $shiftId,\n            $userId,\n            $customerName,',
+              '            $shiftId,\n            $userId,\n            $customerId,\n            $customerName,')
+          replace_exact(
+              sales,
+              '        command.Parameters.AddWithValue("$userId", user.Id);\n        command.Parameters.AddWithValue(\n            "$customerName",',
+              '        command.Parameters.AddWithValue("$userId", user.Id);\n        command.Parameters.AddWithValue(\n            "$customerId",\n            string.IsNullOrWhiteSpace(request.CustomerId)\n                ? DBNull.Value\n                : request.CustomerId.Trim());\n        command.Parameters.AddWithValue(\n            "$customerName",')
+
+          journals = 'src/Robo.Pos.Server/Accounting/AccountingJournalService.cs'
+          replace_exact(
+              journals,
+              '        if (original.Status != "posted")\n        {\n            throw Conflict(\n                "journal_not_posted",\n                "Only a posted journal can be reversed.");\n        }\n        await RequireAccountingAccessAsync(',
+              '        if (original.Status != "posted")\n        {\n            throw Conflict(\n                "journal_not_posted",\n                "Only a posted journal can be reversed.");\n        }\n        if (original.SourceType == "system")\n        {\n            throw Conflict(\n                "system_journal_reversal_requires_source_workflow",\n                "System-generated journals must be reversed through their originating sale, expense, receipt or payment workflow.");\n        }\n        await RequireAccountingAccessAsync(')
+
+          settlements = 'src/Robo.Pos.Server/Finance/FinanceSettlementService.cs'
+          replace_exact(
+              settlements,
+              '            FROM finance_receivable_items AS item\n            WHERE item.id = $itemId',
+              '            FROM finance_receivable_items AS item\n            INNER JOIN accounting_journals AS source_journal\n                ON source_journal.id = item.posting_journal_id\n               AND source_journal.status = \'posted\'\n            WHERE item.id = $itemId')
+          replace_exact(
+              settlements,
+              '            FROM finance_payable_items AS item\n            WHERE item.id = $itemId',
+              '            FROM finance_payable_items AS item\n            INNER JOIN accounting_journals AS source_journal\n                ON source_journal.id = item.posting_journal_id\n               AND source_journal.status = \'posted\'\n            WHERE item.id = $itemId')
+
+          migration = 'src/Robo.Pos.Server/Data/Migrations/012_finance_settlements.sql'
+          replace_exact(
+              migration,
+              '            INNER JOIN finance_receivable_items AS item\n                ON item.id = NEW.receivable_item_id\n               AND item.organization_id = receipt.organization_id\n               AND item.shop_id = receipt.shop_id\n               AND item.customer_id = receipt.customer_id\n            WHERE receipt.id = NEW.receipt_id',
+              '            INNER JOIN finance_receivable_items AS item\n                ON item.id = NEW.receivable_item_id\n               AND item.organization_id = receipt.organization_id\n               AND item.shop_id = receipt.shop_id\n               AND item.customer_id = receipt.customer_id\n            INNER JOIN accounting_journals AS source_journal\n                ON source_journal.id = item.posting_journal_id\n               AND source_journal.status = \'posted\'\n            WHERE receipt.id = NEW.receipt_id')
+          replace_exact(
+              migration,
+              '            INNER JOIN finance_payable_items AS item\n                ON item.id = NEW.payable_item_id\n               AND item.organization_id = payment.organization_id\n               AND item.shop_id = payment.shop_id\n               AND item.supplier_id = payment.supplier_id\n            WHERE payment.id = NEW.payment_id',
+              '            INNER JOIN finance_payable_items AS item\n                ON item.id = NEW.payable_item_id\n               AND item.organization_id = payment.organization_id\n               AND item.shop_id = payment.shop_id\n               AND item.supplier_id = payment.supplier_id\n            INNER JOIN accounting_journals AS source_journal\n                ON source_journal.id = item.posting_journal_id\n               AND source_journal.status = \'posted\'\n            WHERE payment.id = NEW.payment_id')
+
+          reporting = Path('src/Robo.Pos.Server/Finance/FinanceReportingService.cs')
+          reporting_text = reporting.read_text(encoding='utf-8')
+          start = reporting_text.index('    private async Task<FinanceSettlementRecord> GetSettlementAsync(')
+          end = reporting_text.index('    private async Task<AgeingReport> GetAgeingAsync(', start)
+          replacement = '''    private async Task<FinanceSettlementRecord> GetSettlementAsync(
+              AuthenticatedUser user,
+              ActiveShopContextRecord context,
+              string settlementType,
+              string settlementId,
+              CancellationToken cancellationToken)
+          {
+              await using var connection = new SqliteConnection(_database.ConnectionString);
+              await connection.OpenAsync(cancellationToken);
+              await RequireFinanceAccessAsync(
+                  connection,
+                  transaction: null,
+                  user,
+                  context.ShopId,
+                  cancellationToken);
+
+              bool customerReceipt = settlementType == "customer_receipt";
+              string table = customerReceipt
+                  ? "finance_customer_receipts"
+                  : "finance_supplier_payments";
+              string counterpartyTable = customerReceipt
+                  ? "finance_customers"
+                  : "suppliers";
+              string counterpartyColumn = customerReceipt
+                  ? "customer_id"
+                  : "supplier_id";
+              string numberColumn = customerReceipt
+                  ? "receipt_number"
+                  : "payment_number";
+              string dateColumn = customerReceipt
+                  ? "receipt_date"
+                  : "payment_date";
+
+              string id;
+              string number;
+              string date;
+              string shopId;
+              string shopCode;
+              string counterpartyId;
+              string counterpartyName;
+              string paymentMethod;
+              long amountMinor;
+              string reference;
+              string notes;
+              string status;
+              string? postingJournalId;
+              string? reversalJournalId;
+              string createdByDisplayName;
+              DateTimeOffset createdAtUtc;
+              DateTimeOffset? postedAtUtc;
+              DateTimeOffset? reversedAtUtc;
+              string? reversalReason;
+
+              await using (var header = connection.CreateCommand())
+              {
+                  header.CommandText =
+                      $"""
+                      SELECT
+                          settlement.id,
+                          settlement.{numberColumn},
+                          settlement.{dateColumn},
+                          settlement.shop_id,
+                          shop.code,
+                          settlement.{counterpartyColumn},
+                          counterparty.name,
+                          settlement.payment_method,
+                          settlement.amount_minor,
+                          settlement.reference,
+                          settlement.notes,
+                          settlement.status,
+                          settlement.posting_journal_id,
+                          settlement.reversal_journal_id,
+                          creator.display_name,
+                          settlement.created_at_utc,
+                          settlement.posted_at_utc,
+                          settlement.reversed_at_utc,
+                          settlement.reversal_reason
+                      FROM {table} AS settlement
+                      INNER JOIN shops AS shop
+                          ON shop.id = settlement.shop_id
+                      INNER JOIN {counterpartyTable} AS counterparty
+                          ON counterparty.id = settlement.{counterpartyColumn}
+                      INNER JOIN users AS creator
+                          ON creator.id = settlement.created_by_user_id
+                      WHERE settlement.id = $id
+                        AND settlement.organization_id = $organizationId
+                        AND settlement.shop_id = $shopId
+                      LIMIT 1;
+                      """;
+                  header.Parameters.AddWithValue("$id", settlementId);
+                  header.Parameters.AddWithValue("$organizationId", context.OrganizationId);
+                  header.Parameters.AddWithValue("$shopId", context.ShopId);
+
+                  await using var reader =
+                      await header.ExecuteReaderAsync(cancellationToken);
+                  if (!await reader.ReadAsync(cancellationToken))
+                  {
+                      throw NotFound(
+                          "settlement_not_found",
+                          "The settlement could not be found in the active branch.");
+                  }
+
+                  id = reader.GetString(0);
+                  number = reader.GetString(1);
+                  date = reader.GetString(2);
+                  shopId = reader.GetString(3);
+                  shopCode = reader.GetString(4);
+                  counterpartyId = reader.GetString(5);
+                  counterpartyName = reader.GetString(6);
+                  paymentMethod = reader.GetString(7);
+                  amountMinor = reader.GetInt64(8);
+                  reference = reader.GetString(9);
+                  notes = reader.GetString(10);
+                  status = reader.GetString(11);
+                  postingJournalId = reader.IsDBNull(12) ? null : reader.GetString(12);
+                  reversalJournalId = reader.IsDBNull(13) ? null : reader.GetString(13);
+                  createdByDisplayName = reader.GetString(14);
+                  createdAtUtc = DateTimeOffset.Parse(reader.GetString(15));
+                  postedAtUtc = reader.IsDBNull(16)
+                      ? null
+                      : DateTimeOffset.Parse(reader.GetString(16));
+                  reversedAtUtc = reader.IsDBNull(17)
+                      ? null
+                      : DateTimeOffset.Parse(reader.GetString(17));
+                  reversalReason = reader.IsDBNull(18) ? null : reader.GetString(18);
+              }
+
+              string allocationTable = customerReceipt
+                  ? "finance_customer_receipt_allocations"
+                  : "finance_supplier_payment_allocations";
+              string allocationParentColumn = customerReceipt
+                  ? "receipt_id"
+                  : "payment_id";
+              string allocationItemColumn = customerReceipt
+                  ? "receivable_item_id"
+                  : "payable_item_id";
+              string itemTable = customerReceipt
+                  ? "finance_receivable_items"
+                  : "finance_payable_items";
+
+              var allocations = new List<SettlementAllocationRecord>();
+              await using var allocationCommand = connection.CreateCommand();
+              allocationCommand.CommandText =
+                  $"""
+                  SELECT allocation.{allocationItemColumn}, item.document_number, allocation.amount_minor
+                  FROM {allocationTable} AS allocation
+                  INNER JOIN {itemTable} AS item
+                      ON item.id = allocation.{allocationItemColumn}
+                  WHERE allocation.{allocationParentColumn} = $settlementId
+                  ORDER BY item.document_date, item.document_number;
+                  """;
+              allocationCommand.Parameters.AddWithValue("$settlementId", settlementId);
+              await using var allocationReader =
+                  await allocationCommand.ExecuteReaderAsync(cancellationToken);
+              while (await allocationReader.ReadAsync(cancellationToken))
+              {
+                  allocations.Add(new SettlementAllocationRecord(
+                      allocationReader.GetString(0),
+                      allocationReader.GetString(1),
+                      allocationReader.GetInt64(2)));
+              }
+
+              return new FinanceSettlementRecord(
+                  id,
+                  settlementType,
+                  number,
+                  date,
+                  shopId,
+                  shopCode,
+                  counterpartyId,
+                  counterpartyName,
+                  paymentMethod,
+                  amountMinor,
+                  reference,
+                  notes,
+                  status,
+                  postingJournalId,
+                  reversalJournalId,
+                  createdByDisplayName,
+                  createdAtUtc,
+                  postedAtUtc,
+                  reversedAtUtc,
+                  reversalReason,
+                  allocations);
+          }
+
+          '''
+          reporting.write_text(reporting_text[:start] + replacement + reporting_text[end:], encoding='utf-8')
+
+          program = 'src/Robo.Pos.Server/Program.cs'
+          replace_exact(
+              program,
+              'using Robo.Pos.Server.Accounting;\n',
+              'using Robo.Pos.Server.Accounting;\nusing Robo.Pos.Server.Finance;\n')
+          replace_exact(
+              program,
+              'builder.Services.AddSingleton<AccountingService>();\n',
+              'builder.Services.AddSingleton<AccountingService>();\nbuilder.Services.AddSingleton<FinanceService>();\n')
+          replace_exact(program, 'version = "5.5.0"', 'version = "5.6.0"', count=2)
+          replace_exact(
+              program,
+              '        "immutable-operational-accounting-links"\n',
+              '        "immutable-operational-accounting-links",\n        "customer-credit-accounts",\n        "receivables-and-payables-open-items",\n        "atomic-customer-receipt-posting",\n        "atomic-supplier-payment-posting",\n        "audited-settlement-reversals",\n        "customer-and-supplier-statements",\n        "receivables-and-payables-ageing",\n        "ledger-derived-cashbook"\n')
+          replace_exact(
+              program,
+              'app.MapAccountingEndpoints();\napp.MapSalesEndpoints();',
+              'app.MapAccountingEndpoints();\napp.MapFinanceEndpoints();\napp.MapSalesEndpoints();')
+
+          Path('.github/workflows/finance-integration-autopatch.yml').unlink()
+
+      - name: Commit exact patch
+        shell: bash
+        run: |
+          git config user.name "Nexus Finance Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Integrate finance settlements [finance-autopatch]"
+          git push origin HEAD:agent/receivables-payables-cashbook

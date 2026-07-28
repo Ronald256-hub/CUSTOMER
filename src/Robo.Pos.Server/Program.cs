@@ -1,3 +1,4 @@
+using Robo.Pos.Server.Accounting;
 using Robo.Pos.Server.Business;
 using Robo.Pos.Server.Administration;
 using Robo.Pos.Server.Sales;
@@ -33,6 +34,7 @@ builder.Services.AddSingleton<InventoryService>();
 builder.Services.AddSingleton<ShopInventoryService>();
 builder.Services.AddSingleton<StockTransferService>();
 builder.Services.AddSingleton<StockTransferAuditService>();
+builder.Services.AddSingleton<AccountingService>();
 builder.Services.AddSingleton<AuditDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
 builder.Services.AddSingleton<ShopSalesService>();
@@ -88,7 +90,7 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
 {
     application = "Nexus POS",
     service = "Production Server",
-    version = "5.4.1",
+    version = "5.5.0",
     status = "running",
     capabilities = new[]
     {
@@ -111,7 +113,13 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
         "stock-transfer-discrepancy-audit",
         "stock-transfer-reporting",
         "database-enforced-stock-transfer-state-machine",
-        "immutable-stock-transfer-line-audit"
+        "immutable-stock-transfer-line-audit",
+        "organization-chart-of-accounts",
+        "branch-scoped-double-entry-journals",
+        "immutable-posted-ledger",
+        "audited-journal-reversals",
+        "accounting-period-closing-controls",
+        "shop-and-consolidated-trial-balance"
     }
 }));
 
@@ -133,7 +141,7 @@ app.MapGet(
         {
             ok = true,
             application = "Nexus POS",
-            version = "5.4.1",
+            version = "5.5.0",
             instanceId,
             schemaVersion = status.SchemaVersion,
             database = status
@@ -220,6 +228,7 @@ app.MapShopContextEndpoints();
 app.MapInventoryEndpoints();
 app.MapStockTransferEndpoints();
 app.MapStockTransferAuditEndpoints();
+app.MapAccountingEndpoints();
 app.MapSalesEndpoints();
 app.MapAdminReferenceEndpoints();
 app.MapBusinessOperationsEndpoints();

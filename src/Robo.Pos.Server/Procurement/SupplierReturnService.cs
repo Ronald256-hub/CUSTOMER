@@ -300,7 +300,7 @@ public sealed partial class ProcurementService
                 transaction,
                 context.ShopId,
                 line.ReceiptLine.ProductId,
-                "supplier_return",
+                "adjustment",
                 -line.Request.QuantityBaseUnits,
                 newBalance,
                 line.LineTotalMinor,

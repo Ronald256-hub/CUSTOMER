@@ -420,7 +420,7 @@ try {
 
     $movements = Invoke-Json -Method GET -Uri "$baseUri/api/v3/admin/inventory/stock-movements?productId=$($product.id)&limit=50" -Session $session
     $purchaseMovements = @($movements.movements | Where-Object { $_.movementType -eq "purchase" })
-    $returnMovements = @($movements.movements | Where-Object { $_.movementType -eq "supplier_return" })
+    $returnMovements = @($movements.movements | Where-Object { $_.movementType -eq "adjustment" -and $_.referenceType -eq "supplier_return" })
     $countMovements = @($movements.movements | Where-Object { $_.movementType -eq "stocktake" })
     if ($purchaseMovements.Count -ne 2 -or $returnMovements.Count -ne 1 -or $countMovements.Count -ne 1) {
         throw "The procurement stock movement audit trail is incomplete."

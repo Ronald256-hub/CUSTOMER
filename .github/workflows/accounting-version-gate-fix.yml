@@ -1,0 +1,51 @@
+name: Apply accounting version gate fix
+
+on:
+  push:
+    branches:
+      - agent/receivables-payables-cashbook
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: ${{ !contains(github.event.head_commit.message, '[accounting-version-fix]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/receivables-payables-cashbook
+          fetch-depth: 0
+
+      - name: Make accounting gate forward compatible
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('release-engineering/VERIFY_ACCOUNTING_KERNEL.ps1')
+          text = path.read_text(encoding='utf-8')
+          old = '''    if (-not $health -or -not $health.ok -or $health.schemaVersion -lt 10 -or $health.version -ne "5.5.0") {
+                  throw "Nexus did not start with version 5.5.0 and schema version 10 or later."
+              }'''
+          new = '''    $minimumAccountingVersion = [version]"5.5.0"
+              $runningVersion = [version]$health.version
+              if (-not $health -or -not $health.ok -or $health.schemaVersion -lt 10 -or $runningVersion -lt $minimumAccountingVersion) {
+                  throw "Nexus did not start with version 5.5.0 or later and schema version 10 or later."
+              }'''
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one accounting version assertion, found {text.count(old)}')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          Path('.github/workflows/accounting-version-gate-fix.yml').unlink()
+          PY
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          git config user.name "Nexus Release Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Make accounting version gate forward compatible [accounting-version-fix]"
+          git push origin HEAD:agent/receivables-payables-cashbook

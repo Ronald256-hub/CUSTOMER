@@ -126,6 +126,7 @@ public sealed record AccountingJournalListItem(
     string JournalDate,
     string Description,
     string SourceType,
+    string? SourceId,
     string Status,
     long TotalDebitMinor,
     long TotalCreditMinor,

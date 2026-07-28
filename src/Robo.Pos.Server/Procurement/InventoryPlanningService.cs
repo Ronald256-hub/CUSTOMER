@@ -1235,7 +1235,7 @@ public sealed partial class ProcurementService
         string gainId = await ResolveSystemAccountAsync(
             connection, transaction, context.OrganizationId, "other_income", cancellationToken);
         string lossId = await ResolveSystemAccountAsync(
-            connection, transaction, context.OrganizationId, "inventory_loss_damage", cancellationToken);
+            connection, transaction, context.OrganizationId, "inventory_loss", cancellationToken);
         long total = checked(positiveValue + negativeValue);
         string journalId = Guid.NewGuid().ToString("N");
         string journalNumber = await NextAccountingJournalNumberAsync(

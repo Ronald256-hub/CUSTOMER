@@ -155,8 +155,10 @@ try {
         }
         catch { }
     }
-    if (-not $health -or -not $health.ok -or $health.schemaVersion -lt 12 -or $health.version -ne "5.6.0") {
-        throw "Nexus did not start with version 5.6.0 and finance schema version 12."
+    $minimumFinanceVersion = [version]"5.6.0"
+    $runningVersion = [version]$health.version
+    if (-not $health -or -not $health.ok -or $health.schemaVersion -lt 12 -or $runningVersion -lt $minimumFinanceVersion) {
+        throw "Nexus did not start with version 5.6.0 or later and finance schema version 12 or later."
     }
 
     $service = Invoke-Json -Method GET -Uri "$baseUri/api/v3/service"

@@ -1,5 +1,6 @@
 using Robo.Pos.Server.Accounting;
 using Robo.Pos.Server.Finance;
+using Robo.Pos.Server.Procurement;
 using Robo.Pos.Server.Business;
 using Robo.Pos.Server.Administration;
 using Robo.Pos.Server.Sales;
@@ -37,6 +38,7 @@ builder.Services.AddSingleton<StockTransferService>();
 builder.Services.AddSingleton<StockTransferAuditService>();
 builder.Services.AddSingleton<AccountingService>();
 builder.Services.AddSingleton<FinanceService>();
+builder.Services.AddSingleton<ProcurementService>();
 builder.Services.AddSingleton<AuditDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
 builder.Services.AddSingleton<ShopSalesService>();
@@ -92,7 +94,7 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
 {
     application = "Nexus POS",
     service = "Production Server",
-    version = "5.6.0",
+    version = "5.7.0",
     status = "running",
     capabilities = new[]
     {
@@ -134,7 +136,15 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
         "audited-settlement-reversals",
         "customer-and-supplier-statements",
         "receivables-and-payables-ageing",
-        "ledger-derived-cashbook"
+        "ledger-derived-cashbook",
+        "purchase-order-draft-submit-approval",
+        "partial-goods-receipt-notes",
+        "landed-cost-capitalisation",
+        "batch-and-expiry-inventory",
+        "audited-supplier-return-credits",
+        "approved-branch-stock-counts",
+        "reorder-policy-and-recommendations",
+        "procurement-performance-reporting"
     }
 }));
 
@@ -156,7 +166,7 @@ app.MapGet(
         {
             ok = true,
             application = "Nexus POS",
-            version = "5.6.0",
+            version = "5.7.0",
             instanceId,
             schemaVersion = status.SchemaVersion,
             database = status
@@ -245,6 +255,7 @@ app.MapStockTransferEndpoints();
 app.MapStockTransferAuditEndpoints();
 app.MapAccountingEndpoints();
 app.MapFinanceEndpoints();
+app.MapProcurementEndpoints();
 app.MapSalesEndpoints();
 app.MapAdminReferenceEndpoints();
 app.MapBusinessOperationsEndpoints();

@@ -143,36 +143,24 @@ public sealed partial class ProcurementService
                 "A purchase order cannot contain more than 250 product lines.");
         }
 
-        var normalized = lines
-            .GroupBy(line => NormalizeId(line.ProductId), StringComparer.Ordinal)
-            .Select(group => new NormalizedOrderLine(
-                group.Key,
-                checked(group.Sum(item => item.QuantityBaseUnits)),
-                group.Select(item => item.UnitCostMinor).Distinct().SingleOrDefault()))
+        var normalized = new List<NormalizedOrderLine>();
+    foreach (IGrouping<string, PurchaseOrderLineRequest> group in
+             lines.GroupBy(line => NormalizeId(line.ProductId), StringComparer.Ordinal))
+    {
+        List<long> costs = group
+            .Select(item => item.UnitCostMinor)
+            .Distinct()
             .ToList();
-
-        if (normalized.Any(line =>
-                line.QuantityBaseUnits <= 0 ||
-                line.UnitCostMinor < 0 ||
-                groupHasMixedCost(lines, line.ProductId)))
+        long quantity = checked(group.Sum(item => item.QuantityBaseUnits));
+        if (costs.Count != 1 || quantity <= 0 || costs[0] < 0)
         {
             throw Validation(
                 "invalid_purchase_order_item",
                 "Every purchase order line requires positive quantity and one non-negative unit cost.");
         }
-        return normalized;
-
-        static bool groupHasMixedCost(
-            IReadOnlyList<PurchaseOrderLineRequest> source,
-            string productId) =>
-            source.Where(item => string.Equals(
-                    item.ProductId?.Trim(),
-                    productId,
-                    StringComparison.Ordinal))
-                .Select(item => item.UnitCostMinor)
-                .Distinct()
-                .Skip(1)
-                .Any();
+        normalized.Add(new NormalizedOrderLine(group.Key, quantity, costs[0]));
+    }
+    return normalized;
     }
 
     private static async Task<string> RequireSupplierAsync(

@@ -156,8 +156,10 @@ try {
         }
         catch { }
     }
-    if (-not $health -or -not $health.ok -or $health.schemaVersion -lt 13 -or $health.version -ne "5.7.0") {
-        throw "Nexus did not start with version 5.7.0 and procurement schema version 13."
+    $minimumProcurementVersion = [version]"5.7.0"
+    $runningVersion = [version]$health.version
+    if (-not $health -or -not $health.ok -or $health.schemaVersion -lt 13 -or $runningVersion -lt $minimumProcurementVersion) {
+        throw "Nexus did not start with version 5.7.0 or later and procurement schema version 13 or later."
     }
 
     $service = Invoke-Json -Method GET -Uri "$baseUri/api/v3/service"
@@ -406,7 +408,7 @@ try {
     }
 
     $countJournal = Get-JournalBySource -BaseUri $baseUri -Session $session -SourceId ("stock_count:" + $stockCount.id)
-    if ($countJournal.status -ne "posted" -or $countJournal.totalDebitMinor -ne 500 -or $countJournal.totalCreditMinor -ne 500 -or $countJournal.lines.Count -ne 2) {
+    if ($countJournal.status -ne "posted" -or $countJournal.totalDebitMinor -ne 600 -or $countJournal.totalCreditMinor -ne 600 -or $countJournal.lines.Count -ne 2) {
         throw "The stock count shortage journal is not balanced."
     }
 
@@ -433,7 +435,7 @@ try {
     if (-not $accountsPayable -or $accountsPayable.creditBalanceMinor -ne 4800) {
         throw "The payable ledger did not reflect the supplier return credit."
     }
-    if (-not $inventory -or $inventory.debitBalanceMinor -ne 4300) {
+    if (-not $inventory -or $inventory.debitBalanceMinor -ne 4200) {
         throw "The inventory ledger did not reflect receipts, return and stock-count shortage."
     }
 

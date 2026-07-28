@@ -163,6 +163,12 @@ public sealed partial class ProcurementService
 
             long baseValue = checked(requested.QuantityBaseUnits * line.UnitCostMinor);
             long lineTotal = checked(baseValue + requested.LandedCostMinor);
+            if (lineTotal % requested.QuantityBaseUnits != 0)
+            {
+                throw Validation(
+                    "landed_cost_allocation_not_divisible",
+                    $"The landed cost allocated to {line.ProductName} must produce an exact cost per base unit.");
+            }
             long effectiveUnitCost = lineTotal / requested.QuantityBaseUnits;
             subtotal = checked(subtotal + baseValue);
             landedCost = checked(landedCost + requested.LandedCostMinor);
@@ -358,59 +364,59 @@ public sealed partial class ProcurementService
     }
 
     private static IReadOnlyList<NormalizedReceiptLine> NormalizeReceiptLines(
-        IReadOnlyList<GoodsReceiptLineRequest>? items)
+    IReadOnlyList<GoodsReceiptLineRequest>? items)
+{
+    if (items is null || items.Count == 0)
     {
-        if (items is null || items.Count == 0)
-        {
-            throw Validation(
-                "goods_receipt_items_required",
-                "Receive at least one purchase order line.");
-        }
-        if (items.Count > 250)
-        {
-            throw Validation(
-                "too_many_goods_receipt_items",
-                "A goods receipt cannot contain more than 250 lines.");
-        }
-
-        var normalized = items
-            .GroupBy(item => NormalizeId(item.PurchaseOrderLineId), StringComparer.Ordinal)
-            .Select(group => new NormalizedReceiptLine(
-                group.Key,
-                checked(group.Sum(item => item.QuantityBaseUnits)),
-                checked(group.Sum(item => item.LandedCostMinor)),
-                group.Select(item => item.BatchNumber?.Trim() ?? string.Empty).Distinct().SingleOrDefault() ?? string.Empty,
-                NormalizeOptionalDate(
-                    group.Select(item => item.ExpiryDate?.Trim() ?? string.Empty).Distinct().SingleOrDefault(),
-                    "invalid_expiry_date")))
-            .ToList();
-
-        foreach (NormalizedReceiptLine item in normalized)
-        {
-            if (item.QuantityBaseUnits <= 0 || item.LandedCostMinor < 0)
-            {
-                throw Validation(
-                    "invalid_goods_receipt_item",
-                    "Every goods receipt line requires positive quantity and non-negative landed cost.");
-            }
-            if (items.Where(source => string.Equals(
-                        source.PurchaseOrderLineId?.Trim(),
-                        item.PurchaseOrderLineId,
-                        StringComparison.Ordinal))
-                    .Select(source => source.BatchNumber?.Trim() ?? string.Empty)
-                    .Distinct()
-                    .Skip(1)
-                    .Any())
-            {
-                throw Validation(
-                    "mixed_batch_for_order_line",
-                    "Use one batch number per purchase order line in a goods receipt.");
-            }
-        }
-        return normalized;
+        throw Validation(
+            "goods_receipt_items_required",
+            "Receive at least one purchase order line.");
+    }
+    if (items.Count > 250)
+    {
+        throw Validation(
+            "too_many_goods_receipt_items",
+            "A goods receipt cannot contain more than 250 lines.");
     }
 
-    private static async Task<IReadOnlyDictionary<string, PurchaseOrderLineState>>
+    var normalized = new List<NormalizedReceiptLine>();
+    foreach (IGrouping<string, GoodsReceiptLineRequest> group in
+             items.GroupBy(item => NormalizeId(item.PurchaseOrderLineId), StringComparer.Ordinal))
+    {
+        List<string> batches = group
+            .Select(item => item.BatchNumber?.Trim() ?? string.Empty)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        List<string> expiries = group
+            .Select(item => item.ExpiryDate?.Trim() ?? string.Empty)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (batches.Count != 1 || expiries.Count != 1)
+        {
+            throw Validation(
+                "mixed_batch_for_order_line",
+                "Use one batch number and expiry date per purchase order line in a goods receipt.");
+        }
+
+        long quantity = checked(group.Sum(item => item.QuantityBaseUnits));
+        long landedCost = checked(group.Sum(item => item.LandedCostMinor));
+        if (quantity <= 0 || landedCost < 0)
+        {
+            throw Validation(
+                "invalid_goods_receipt_item",
+                "Every goods receipt line requires positive quantity and non-negative landed cost.");
+        }
+        normalized.Add(new NormalizedReceiptLine(
+            group.Key,
+            quantity,
+            landedCost,
+            batches[0],
+            NormalizeOptionalDate(expiries[0], "invalid_expiry_date")));
+    }
+    return normalized;
+}
+
+private static async Task<IReadOnlyDictionary<string, PurchaseOrderLineState>>
         ReadOrderLineStatesAsync(
             SqliteConnection connection,
             SqliteTransaction transaction,

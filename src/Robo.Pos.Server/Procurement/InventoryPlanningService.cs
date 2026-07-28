@@ -546,7 +546,21 @@ public sealed partial class ProcurementService
             SELECT
                 lower(hex(randomblob(16))), $countId, product.id, product.name,
                 product.sku, COALESCE(balance.quantity_base_units, 0), NULL,
-                product.cost_price_minor, COALESCE(balance.version, 1)
+                COALESCE(
+                    (
+                        SELECT CAST(
+                            SUM(batch.available_quantity_base * batch.unit_cost_minor) /
+                            NULLIF(SUM(batch.available_quantity_base), 0)
+                            AS INTEGER)
+                        FROM inventory_batches AS batch
+                        WHERE batch.shop_id = $shopId
+                          AND batch.product_id = product.id
+                          AND batch.available_quantity_base > 0
+                          AND batch.status = 'active'
+                    ),
+                    product.cost_price_minor
+                ),
+                COALESCE(balance.version, 1)
             FROM products AS product
             LEFT JOIN shop_stock_balances AS balance
                 ON balance.product_id = product.id

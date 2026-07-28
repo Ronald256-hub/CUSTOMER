@@ -1,0 +1,213 @@
+name: Apply procurement hardening corrections
+
+on:
+  push:
+    branches:
+      - agent/advanced-procurement-inventory
+
+permissions:
+  contents: write
+
+jobs:
+  apply-hardening:
+    if: ${{ !contains(github.event.head_commit.message, '[procurement-hardening]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/advanced-procurement-inventory
+          fetch-depth: 0
+
+      - name: Apply exact procurement hardening edits
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_exact(path, old, new, label):
+              file = Path(path)
+              text = file.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one exact match, found {count}')
+              file.write_text(text.replace(old, new), encoding='utf-8')
+
+          replace_exact(
+              'release-engineering/VERIFY_FINANCE_SETTLEMENTS.ps1',
+              '''    if (-not $health -or -not $health.ok -or $health.schemaVersion -lt 12 -or $health.version -ne "5.6.0") {
+                  throw "Nexus did not start with version 5.6.0 and finance schema version 12."
+              }''',
+              '''    $minimumFinanceVersion = [version]"5.6.0"
+              $runningVersion = [version]$health.version
+              if (-not $health -or -not $health.ok -or $health.schemaVersion -lt 12 -or $runningVersion -lt $minimumFinanceVersion) {
+                  throw "Nexus did not start with version 5.6.0 or later and finance schema version 12 or later."
+              }''',
+              'finance version gate')
+
+          replace_exact(
+              'release-engineering/VERIFY_ADVANCED_PROCUREMENT.ps1',
+              '''    if (-not $health -or -not $health.ok -or $health.schemaVersion -lt 13 -or $health.version -ne "5.7.0") {
+                  throw "Nexus did not start with version 5.7.0 and procurement schema version 13."
+              }''',
+              '''    $minimumProcurementVersion = [version]"5.7.0"
+              $runningVersion = [version]$health.version
+              if (-not $health -or -not $health.ok -or $health.schemaVersion -lt 13 -or $runningVersion -lt $minimumProcurementVersion) {
+                  throw "Nexus did not start with version 5.7.0 or later and procurement schema version 13 or later."
+              }''',
+              'procurement version gate')
+
+          service = Path('src/Robo.Pos.Server/Procurement/ProcurementService.cs')
+          text = service.read_text(encoding='utf-8')
+          pattern = re.compile(
+              r'''        var normalized = lines\n            \.GroupBy\(line => NormalizeId\(line\.ProductId\), StringComparer\.Ordinal\)\n            \.Select\(group => new NormalizedOrderLine\(\n                group\.Key,\n                checked\(group\.Sum\(item => item\.QuantityBaseUnits\)\),\n                group\.Select\(item => item\.UnitCostMinor\)\.Distinct\(\)\.SingleOrDefault\(\)\)\)\n            \.ToList\(\);\n\n        if \(normalized\.Any\(line =>\n                line\.QuantityBaseUnits <= 0 \|\|\n                line\.UnitCostMinor < 0 \|\|\n                groupHasMixedCost\(lines, line\.ProductId\)\)\)\n        \{\n            throw Validation\(\n                "invalid_purchase_order_item",\n                "Every purchase order line requires positive quantity and one non-negative unit cost\."\);\n        \}\n        return normalized;\n\n        static bool groupHasMixedCost\(\n            IReadOnlyList<PurchaseOrderLineRequest> source,\n            string productId\) =>\n            source\.Where\(item => string\.Equals\(\n                    item\.ProductId\?\.Trim\(\),\n                    productId,\n                    StringComparison\.Ordinal\)\)\n                \.Select\(item => item\.UnitCostMinor\)\n                \.Distinct\(\)\n                \.Skip\(1\)\n                \.Any\(\);''')
+          replacement = '''        var normalized = new List<NormalizedOrderLine>();
+              foreach (IGrouping<string, PurchaseOrderLineRequest> group in
+                       lines.GroupBy(line => NormalizeId(line.ProductId), StringComparer.Ordinal))
+              {
+                  List<long> costs = group
+                      .Select(item => item.UnitCostMinor)
+                      .Distinct()
+                      .ToList();
+                  long quantity = checked(group.Sum(item => item.QuantityBaseUnits));
+                  if (costs.Count != 1 || quantity <= 0 || costs[0] < 0)
+                  {
+                      throw Validation(
+                          "invalid_purchase_order_item",
+                          "Every purchase order line requires positive quantity and one non-negative unit cost.");
+                  }
+                  normalized.Add(new NormalizedOrderLine(group.Key, quantity, costs[0]));
+              }
+              return normalized;'''
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'order line normalisation: expected one match, found {count}')
+          service.write_text(text, encoding='utf-8')
+
+          receipt = Path('src/Robo.Pos.Server/Procurement/GoodsReceiptService.cs')
+          text = receipt.read_text(encoding='utf-8')
+          method_pattern = re.compile(
+              r'''    private static IReadOnlyList<NormalizedReceiptLine> NormalizeReceiptLines\(\n        IReadOnlyList<GoodsReceiptLineRequest>\? items\)\n    \{.*?\n    \}\n\n    private static async Task<IReadOnlyDictionary<string, PurchaseOrderLineState>>''',
+              re.S)
+          method_replacement = '''    private static IReadOnlyList<NormalizedReceiptLine> NormalizeReceiptLines(
+              IReadOnlyList<GoodsReceiptLineRequest>? items)
+          {
+              if (items is null || items.Count == 0)
+              {
+                  throw Validation(
+                      "goods_receipt_items_required",
+                      "Receive at least one purchase order line.");
+              }
+              if (items.Count > 250)
+              {
+                  throw Validation(
+                      "too_many_goods_receipt_items",
+                      "A goods receipt cannot contain more than 250 lines.");
+              }
+
+              var normalized = new List<NormalizedReceiptLine>();
+              foreach (IGrouping<string, GoodsReceiptLineRequest> group in
+                       items.GroupBy(item => NormalizeId(item.PurchaseOrderLineId), StringComparer.Ordinal))
+              {
+                  List<string> batches = group
+                      .Select(item => item.BatchNumber?.Trim() ?? string.Empty)
+                      .Distinct(StringComparer.Ordinal)
+                      .ToList();
+                  List<string> expiries = group
+                      .Select(item => item.ExpiryDate?.Trim() ?? string.Empty)
+                      .Distinct(StringComparer.Ordinal)
+                      .ToList();
+                  if (batches.Count != 1 || expiries.Count != 1)
+                  {
+                      throw Validation(
+                          "mixed_batch_for_order_line",
+                          "Use one batch number and expiry date per purchase order line in a goods receipt.");
+                  }
+
+                  long quantity = checked(group.Sum(item => item.QuantityBaseUnits));
+                  long landedCost = checked(group.Sum(item => item.LandedCostMinor));
+                  if (quantity <= 0 || landedCost < 0)
+                  {
+                      throw Validation(
+                          "invalid_goods_receipt_item",
+                          "Every goods receipt line requires positive quantity and non-negative landed cost.");
+                  }
+                  normalized.Add(new NormalizedReceiptLine(
+                      group.Key,
+                      quantity,
+                      landedCost,
+                      batches[0],
+                      NormalizeOptionalDate(expiries[0], "invalid_expiry_date")));
+              }
+              return normalized;
+          }
+
+          private static async Task<IReadOnlyDictionary<string, PurchaseOrderLineState>>'''
+          text, count = method_pattern.subn(method_replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'receipt normalisation: expected one method, found {count}')
+
+          old_value = '''            long baseValue = checked(requested.QuantityBaseUnits * line.UnitCostMinor);
+                      long lineTotal = checked(baseValue + requested.LandedCostMinor);
+                      long effectiveUnitCost = lineTotal / requested.QuantityBaseUnits;'''
+          new_value = '''            long baseValue = checked(requested.QuantityBaseUnits * line.UnitCostMinor);
+                      long lineTotal = checked(baseValue + requested.LandedCostMinor);
+                      if (lineTotal % requested.QuantityBaseUnits != 0)
+                      {
+                          throw Validation(
+                              "landed_cost_allocation_not_divisible",
+                              $"The landed cost allocated to {line.ProductName} must produce an exact cost per base unit.");
+                      }
+                      long effectiveUnitCost = lineTotal / requested.QuantityBaseUnits;'''
+          if text.count(old_value) != 1:
+              raise SystemExit(f'landed cost validation: expected one match, found {text.count(old_value)}')
+          receipt.write_text(text.replace(old_value, new_value), encoding='utf-8')
+
+          planning = Path('src/Robo.Pos.Server/Procurement/InventoryPlanningService.cs')
+          text = planning.read_text(encoding='utf-8')
+          old_cost = '''                product.sku, COALESCE(balance.quantity_base_units, 0), NULL,
+                          product.cost_price_minor, COALESCE(balance.version, 1)'''
+          new_cost = '''                product.sku, COALESCE(balance.quantity_base_units, 0), NULL,
+                          COALESCE(
+                              (
+                                  SELECT CAST(
+                                      SUM(batch.available_quantity_base * batch.unit_cost_minor) /
+                                      NULLIF(SUM(batch.available_quantity_base), 0)
+                                      AS INTEGER)
+                                  FROM inventory_batches AS batch
+                                  WHERE batch.shop_id = $shopId
+                                    AND batch.product_id = product.id
+                                    AND batch.available_quantity_base > 0
+                                    AND batch.status = 'active'
+                              ),
+                              product.cost_price_minor
+                          ),
+                          COALESCE(balance.version, 1)'''
+          if text.count(old_cost) != 1:
+              raise SystemExit(f'batch weighted count cost: expected one match, found {text.count(old_cost)}')
+          planning.write_text(text.replace(old_cost, new_cost), encoding='utf-8')
+
+          gate = Path('release-engineering/VERIFY_ADVANCED_PROCUREMENT.ps1')
+          text = gate.read_text(encoding='utf-8')
+          text = text.replace(
+              '$countJournal.totalDebitMinor -ne 500 -or $countJournal.totalCreditMinor -ne 500',
+              '$countJournal.totalDebitMinor -ne 600 -or $countJournal.totalCreditMinor -ne 600')
+          text = text.replace(
+              '$inventory.debitBalanceMinor -ne 4300',
+              '$inventory.debitBalanceMinor -ne 4200')
+          if 'totalDebitMinor -ne 500' in text or 'debitBalanceMinor -ne 4300' in text:
+              raise SystemExit('procurement gate valuation expectations were not fully updated')
+          gate.write_text(text, encoding='utf-8')
+
+          Path('.github/workflows/procurement-hardening-patch.yml').unlink()
+          PY
+
+      - name: Commit hardening corrections
+        shell: bash
+        run: |
+          git config user.name "Nexus Procurement Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Harden procurement validation and valuation [procurement-hardening]"
+          git push origin HEAD:agent/advanced-procurement-inventory

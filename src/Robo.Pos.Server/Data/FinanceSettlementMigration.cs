@@ -6,6 +6,7 @@ namespace Robo.Pos.Server.Data;
 /// <summary>
 /// Applies the customer, receivable, payable, settlement and cashbook schema
 /// as one transaction after the operational accounting foundation is ready.
+/// A failed statement rolls back the complete version-12 migration.
 /// </summary>
 public static class FinanceSettlementMigration
 {

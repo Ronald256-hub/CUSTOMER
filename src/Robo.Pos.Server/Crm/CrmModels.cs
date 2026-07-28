@@ -342,7 +342,7 @@ public sealed record CrmSegmentRecord(
     long LifetimeSpendMinor,
     long OutstandingMinor);
 
-public sealed record CrmException : Exception
+public sealed class CrmException : Exception
 {
     public CrmException(int statusCode, string errorCode, string message)
         : base(message)

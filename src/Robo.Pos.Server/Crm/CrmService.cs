@@ -1010,8 +1010,7 @@ public sealed partial class CrmService
                 reader.GetInt64(39),
                 reader.GetInt64(40),
                 reader.GetInt64(41),
-                reader.GetInt64(42),
-                reader.GetString(43)));
+                reader.GetString(42)));
         }
         return snapshots;
     }

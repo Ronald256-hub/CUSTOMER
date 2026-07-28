@@ -583,6 +583,12 @@ public sealed partial class AccountingService
                 "journal_not_posted",
                 "Only a posted journal can be reversed.");
         }
+        if (original.SourceType == "system")
+        {
+            throw Conflict(
+                "system_journal_reversal_requires_source_workflow",
+                "System-generated journals must be reversed through their originating sale, expense, receipt or payment workflow.");
+        }
         await RequireAccountingAccessAsync(
             connection,
             transaction,

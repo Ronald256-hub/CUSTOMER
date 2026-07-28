@@ -35,7 +35,8 @@ public sealed record CompleteSaleRequest(
     string? CustomerPhone = null,
     string? CustomerAddress = null,
     string? CustomerTaxNumber = null,
-    string? Notes = null);
+    string? Notes = null,
+    string? CustomerId = null);
 
 public sealed record CompletedSaleLine(
     string ProductId,

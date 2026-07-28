@@ -118,6 +118,10 @@ public sealed class DatabaseBootstrap
         await OperationalAccountingMigration.ApplyAsync(
             connection,
             cancellationToken);
+
+        await FinanceSettlementMigration.ApplyAsync(
+            connection,
+            cancellationToken);
     }
 
     public async Task<DatabaseStatus> GetStatusAsync(

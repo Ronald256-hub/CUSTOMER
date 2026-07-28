@@ -126,6 +126,10 @@ public sealed class DatabaseBootstrap
         await AdvancedProcurementMigration.ApplyAsync(
             connection,
             cancellationToken);
+
+        await CrmCustomerManagementMigration.ApplyAsync(
+            connection,
+            cancellationToken);
     }
 
     public async Task<DatabaseStatus> GetStatusAsync(

@@ -110,6 +110,10 @@ public sealed class DatabaseBootstrap
         await StockTransferInvariantMigration.ApplyAsync(
             connection,
             cancellationToken);
+
+        await AccountingKernelMigration.ApplyAsync(
+            connection,
+            cancellationToken);
     }
 
     public async Task<DatabaseStatus> GetStatusAsync(

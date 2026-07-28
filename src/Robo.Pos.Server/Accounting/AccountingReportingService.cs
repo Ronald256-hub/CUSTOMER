@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Robo.Pos.Server.Security;
 using Robo.Pos.Server.Shops;
@@ -43,8 +44,14 @@ public sealed partial class AccountingService
                 "The report start date must not be after the end date.");
         }
 
-        DateOnly parsedFrom = DateOnly.ParseExact(fromDate, "yyyy-MM-dd");
-        DateOnly parsedTo = DateOnly.ParseExact(toDate, "yyyy-MM-dd");
+        DateOnly parsedFrom = DateOnly.ParseExact(
+            fromDate,
+            "yyyy-MM-dd",
+            CultureInfo.InvariantCulture);
+        DateOnly parsedTo = DateOnly.ParseExact(
+            toDate,
+            "yyyy-MM-dd",
+            CultureInfo.InvariantCulture);
         if (parsedTo.DayNumber - parsedFrom.DayNumber > 3660)
         {
             throw Validation(

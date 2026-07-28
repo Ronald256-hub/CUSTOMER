@@ -1,0 +1,118 @@
+name: Validate operational accounting integration
+
+on:
+  pull_request:
+    paths:
+      - 'BUILD_WINDOWS_RELEASE.ps1'
+      - 'RELEASE_SMOKE_TEST.ps1'
+      - 'release-engineering/**'
+      - 'src/**'
+      - '.github/workflows/operational-accounting-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-operational-accounting:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Parse operational accounting gate
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'release-engineering/VERIFY_OPERATIONAL_ACCOUNTING.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $details = $errors | ForEach-Object {
+              "VERIFY_OPERATIONAL_ACCOUNTING.ps1:$($_.Extent.StartLineNumber): $($_.Message)"
+            }
+            throw ($details -join "`n")
+          }
+
+      - name: Apply verified source and build corrections
+        shell: pwsh
+        run: |
+          & 'release-engineering/APPLY_KNOWN_WINDOWS_BUILD_FIXES.ps1' -SourceRoot $PWD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and smoke-test Windows release
+        shell: pwsh
+        run: |
+          & '.\BUILD_WINDOWS_RELEASE.ps1' -Configuration Release -SkipInstaller *>&1 |
+            Tee-Object -FilePath 'operational-accounting-build.log'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run atomic operational accounting gate
+        id: operational_accounting_gate
+        shell: pwsh
+        run: |
+          $exitCode = 0
+          try {
+            & 'release-engineering/VERIFY_OPERATIONAL_ACCOUNTING.ps1' *>&1 |
+              Tee-Object -FilePath 'operational-accounting-gate.log'
+            $exitCode = 0
+          }
+          catch {
+            $_ | Out-String |
+              Tee-Object -FilePath 'operational-accounting-gate.log' -Append
+            $exitCode = 1
+          }
+
+          "OPERATIONAL_ACCOUNTING_GATE_EXIT_CODE=$exitCode" |
+            Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          exit 0
+
+      - name: Upload operational accounting diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-pos-operational-accounting-diagnostics
+          path: |
+            operational-accounting-build.log
+            operational-accounting-gate.log
+            release/smoke-diagnostics-*/**
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Enforce operational accounting result
+        shell: pwsh
+        run: |
+          if ($env:OPERATIONAL_ACCOUNTING_GATE_EXIT_CODE -ne '0') {
+            Get-Content 'operational-accounting-gate.log' -Tail 450 -ErrorAction SilentlyContinue
+            throw "Operational accounting integration gate failed with exit code $env:OPERATIONAL_ACCOUNTING_GATE_EXIT_CODE."
+          }
+
+      - name: Verify release artifacts
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem 'release' -Filter 'Nexus_POS_*_Portable.zip' -File | Select-Object -First 1
+          if (-not $zip) { throw 'Portable Nexus POS ZIP was not produced.' }
+
+          $manifest = 'release/SHA256SUMS.txt'
+          if (-not (Test-Path $manifest -PathType Leaf)) {
+            throw 'SHA256SUMS.txt was not produced.'
+          }
+
+          $line = Get-Content $manifest | Where-Object { $_ -like "*$($zip.Name)" } | Select-Object -First 1
+          if (-not $line) { throw 'Portable ZIP is missing from SHA256SUMS.txt.' }
+
+          $expected = ($line -split '\s+')[0].ToLowerInvariant()
+          $actual = (Get-FileHash $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "Portable ZIP checksum mismatch. Expected $expected, got $actual."
+          }

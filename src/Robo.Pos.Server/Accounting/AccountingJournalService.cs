@@ -59,6 +59,7 @@ public sealed partial class AccountingService
             journal.journal_date,
             journal.description,
             journal.source_type,
+            journal.source_id,
             journal.status,
             journal.total_debit_minor,
             journal.total_credit_minor,
@@ -96,11 +97,12 @@ public sealed partial class AccountingService
                 reader.GetString(4),
                 reader.GetString(5),
                 reader.GetString(6),
-                reader.GetString(7),
-                reader.GetInt64(8),
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.GetString(8),
                 reader.GetInt64(9),
-                reader.GetInt32(10),
-                ParseDateTime(reader.GetString(11))));
+                reader.GetInt64(10),
+                reader.GetInt32(11),
+                ParseDateTime(reader.GetString(12))));
         }
 
         return journals;

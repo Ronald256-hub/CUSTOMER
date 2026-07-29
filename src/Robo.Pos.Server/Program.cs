@@ -2,6 +2,7 @@ using Robo.Pos.Server.Accounting;
 using Robo.Pos.Server.Finance;
 using Robo.Pos.Server.Procurement;
 using Robo.Pos.Server.Crm;
+using Robo.Pos.Server.Hrm;
 using Robo.Pos.Server.Business;
 using Robo.Pos.Server.Administration;
 using Robo.Pos.Server.Sales;
@@ -41,6 +42,7 @@ builder.Services.AddSingleton<AccountingService>();
 builder.Services.AddSingleton<FinanceService>();
 builder.Services.AddSingleton<ProcurementService>();
 builder.Services.AddSingleton<CrmService>();
+builder.Services.AddSingleton<HrmService>();
 builder.Services.AddSingleton<AuditDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
 builder.Services.AddSingleton<ShopSalesService>();
@@ -96,7 +98,7 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
 {
     application = "Nexus POS",
     service = "Production Server",
-    version = "5.8.0",
+    version = "5.9.0",
     status = "running",
     capabilities = new[]
     {
@@ -158,7 +160,20 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
         "branch-numbered-customer-quotations",
         "quotation-to-sale-reconciliation",
         "customer-commercial-timeline",
-        "customer-segmentation-and-dashboard"
+        "customer-segmentation-and-dashboard",
+        "organization-and-branch-workforce-master",
+        "employee-login-account-linking",
+        "department-and-position-management",
+        "published-work-schedules",
+        "audited-clock-in-and-clock-out",
+        "attendance-approval-and-overtime",
+        "leave-types-and-approval-workflow",
+        "approved-leave-overlap-prevention",
+        "payroll-period-calculation-and-approval",
+        "employee-performance-reviews",
+        "training-and-certification-records",
+        "disciplinary-case-management",
+        "workforce-dashboard-and-analytics"
     }
 }));
 
@@ -180,7 +195,7 @@ app.MapGet(
         {
             ok = true,
             application = "Nexus POS",
-            version = "5.8.0",
+            version = "5.9.0",
             instanceId,
             schemaVersion = status.SchemaVersion,
             database = status
@@ -271,6 +286,7 @@ app.MapAccountingEndpoints();
 app.MapFinanceEndpoints();
 app.MapProcurementEndpoints();
 app.MapCrmEndpoints();
+app.MapHrmEndpoints();
 app.MapSalesEndpoints();
 app.MapAdminReferenceEndpoints();
 app.MapBusinessOperationsEndpoints();

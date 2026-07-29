@@ -51,7 +51,7 @@ try {
 
   await page.getByRole("button", { name: "Open module command palette" }).click();
   await page.getByLabel("Search modules").fill("inventory");
-  await page.getByRole("button", { name: /Inventory/ }).click();
+  await page.locator('#commandPalette [data-command-page="inventory"]').click();
   await page.getByRole("heading", { name: "Inventory" }).waitFor();
   await page.getByText("Current inventory", { exact: true }).waitFor();
 

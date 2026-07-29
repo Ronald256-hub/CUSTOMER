@@ -22,11 +22,20 @@ const context = await browser.newContext({
 const page = await context.newPage();
 const pageErrors = [];
 const consoleErrors = [];
+const httpErrors = [];
 
 page.on("pageerror", (error) => pageErrors.push(error.message));
 page.on("console", (message) => {
   if (message.type() === "error") {
     consoleErrors.push(message.text());
+  }
+});
+page.on("response", (response) => {
+  if (response.status() >= 400) {
+    httpErrors.push({
+      status: response.status(),
+      url: response.url()
+    });
   }
 });
 
@@ -99,7 +108,22 @@ try {
     throw new Error(`Browser page errors: ${pageErrors.join(" | ")}`);
   }
 
+  const unexpectedHttpErrors = httpErrors.filter(({ status, url }) => {
+    const path = new URL(url).pathname;
+    const expectedAnonymousProbe = status === 401 && path === "/api/v3/auth/me";
+    const expectedMissingFavicon = status === 404 && path === "/favicon.ico";
+    return !expectedAnonymousProbe && !expectedMissingFavicon;
+  });
+  if (unexpectedHttpErrors.length) {
+    throw new Error(
+      `Unexpected HTTP failures: ${unexpectedHttpErrors
+        .map(({ status, url }) => `${status} ${url}`)
+        .join(" | ")}`
+    );
+  }
+
   const relevantConsoleErrors = consoleErrors.filter((message) =>
+    !message.includes("Failed to load resource") &&
     !message.includes("favicon")
   );
   if (relevantConsoleErrors.length) {

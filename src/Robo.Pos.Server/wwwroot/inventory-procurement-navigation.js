@@ -60,7 +60,7 @@
   async function render() {
     if (rendering || location.hash !== "#procurement") return;
     const page = document.querySelector("#page");
-    if (!page) return;
+    if (!page || page.dataset.procurementWorkspace === "1") return;
     rendering = true;
     page.dataset.procurementWorkspace = "1";
     try {

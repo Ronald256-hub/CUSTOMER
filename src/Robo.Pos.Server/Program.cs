@@ -52,6 +52,7 @@ builder.Services.AddSingleton<ShopShiftService>();
 builder.Services.AddSingleton<ShopSaleCompletionService>();
 builder.Services.AddSingleton<ShopReceiptService>();
 builder.Services.AddSingleton<ShopSalesReportingService>();
+builder.Services.AddSingleton<ShortGlassMonitoringService>();
 builder.Services.AddSingleton<SaleVoidService>();
 builder.Services.AddSingleton<ShopSaleVoidService>();
 builder.Services.AddSingleton<BusinessOperationsService>();
@@ -105,7 +106,7 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
 {
     application = "Nexus POS",
     service = "Production Server",
-    version = "6.0.0",
+    version = "6.1.0",
     status = "running",
     capabilities = new[]
     {
@@ -192,7 +193,12 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
         "time-bound-support-access-grants",
         "audited-support-case-workflow",
         "tenant-health-snapshots",
-        "platform-saas-operations-dashboard"
+        "platform-saas-operations-dashboard",
+        "enterprise-operator-command-centre",
+        "role-aware-module-navigation",
+        "responsive-accessible-web-shell",
+        "global-module-command-palette",
+        "branch-short-glass-operational-report"
     }
 }));
 
@@ -214,7 +220,7 @@ app.MapGet(
         {
             ok = true,
             application = "Nexus POS",
-            version = "6.0.0",
+            version = "6.1.0",
             instanceId,
             schemaVersion = status.SchemaVersion,
             database = status
@@ -308,6 +314,7 @@ app.MapCrmEndpoints();
 app.MapHrmEndpoints();
 app.MapSaasEndpoints();
 app.MapSalesEndpoints();
+app.MapShortGlassMonitoringEndpoints();
 app.MapAdminReferenceEndpoints();
 app.MapBusinessOperationsEndpoints();
 app.MapSystemAdministrationEndpoints();

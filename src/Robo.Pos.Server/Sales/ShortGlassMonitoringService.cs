@@ -34,6 +34,9 @@ public sealed record ShortGlassMonitorReport(
     long TotalRemainingGlasses,
     IReadOnlyList<ShortGlassMonitorRow> Products);
 
+/// <summary>
+/// Provides read-only, branch-scoped short-glass quantity and revenue monitoring.
+/// </summary>
 public sealed class ShortGlassMonitoringService
 {
     private readonly DatabaseBootstrap _database;

@@ -32,8 +32,8 @@ page.on("console", (message) => {
 
 try {
   await page.goto(baseUri, { waitUntil: "networkidle" });
-  await page.getByLabel("Username").fill(username);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Username", { exact: true }).fill(username);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in securely" }).click();
 
   await page.locator(".nexus-command-centre").waitFor({ state: "visible" });

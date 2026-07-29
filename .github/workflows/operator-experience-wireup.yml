@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   wire-operator-experience:
-    if: ${{ github.event.pull_request.head.ref == 'agent/operator-experience-command-centre' && !contains(github.event.pull_request.head.sha, '[operator-experience-wired]') }}
+    if: ${{ github.event.pull_request.head.ref == 'agent/operator-experience-command-centre' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +36,6 @@ jobs:
                   'builder.Services.AddSingleton<ShopSalesReportingService>();\n'
                   'builder.Services.AddSingleton<ShortGlassMonitoringService>();\n'
               ),
-              ('version = "6.0.0",', 'version = "6.1.0",'),
               (
                   '        "platform-saas-operations-dashboard"\n',
                   '        "platform-saas-operations-dashboard",\n'
@@ -59,10 +58,11 @@ jobs:
                   raise SystemExit(f'Expected one occurrence of {old!r}, found {count}')
               text = text.replace(old, new)
 
-          health_old = '            version = "6.0.0",'
-          if text.count(health_old) != 1:
-              raise SystemExit('Expected exactly one health version occurrence')
-          text = text.replace(health_old, '            version = "6.1.0",')
+          version_old = 'version = "6.0.0",'
+          if text.count(version_old) != 2:
+              raise SystemExit(
+                  f'Expected service and health version occurrences, found {text.count(version_old)}')
+          text = text.replace(version_old, 'version = "6.1.0",')
 
           path.write_text(text, encoding='utf-8')
           Path('.github/workflows/operator-experience-wireup.yml').unlink()

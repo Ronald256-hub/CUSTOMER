@@ -3,6 +3,10 @@ using Microsoft.Data.Sqlite;
 
 namespace Robo.Pos.Server.Data;
 
+/// <summary>
+/// Applies the additive SaaS tenant-operations schema after HRM.
+/// Existing organisations remain on the unlimited compatibility plan.
+/// </summary>
 public static class SaasTenantOperationsMigration
 {
     public const int Version = 16;

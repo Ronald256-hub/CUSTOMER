@@ -2,18 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta
-    name="viewport"
-    content="width=device-width,initial-scale=1,viewport-fit=cover"
-  >
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0a1b2d">
-  <meta
-    name="description"
-    content="Nexus POS enterprise operations, inventory, finance, CRM, HRM and tenant administration."
-  >
+  <meta name="description" content="Nexus POS enterprise operations, inventory, finance, CRM, HRM and tenant administration.">
   <title>Nexus POS</title>
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/experience.css">
+  <link rel="stylesheet" href="/transactional-workspaces.css">
 </head>
 <body>
   <a class="nexus-skip-link" href="#page">Skip to main content</a>
@@ -23,32 +18,9 @@
       <div class="logo">NX</div>
       <h1>Nexus POS</h1>
       <p>Secure business operations and point-of-sale platform</p>
-
-      <label>
-        Username
-        <input
-          id="loginUsername"
-          autocomplete="username"
-          autocapitalize="none"
-          spellcheck="false"
-          required
-        >
-      </label>
-
-      <label>
-        Password
-        <input
-          id="loginPassword"
-          type="password"
-          autocomplete="current-password"
-          required
-        >
-      </label>
-
-      <button class="primary full" type="submit">
-        Sign in securely
-      </button>
-
+      <label>Username<input id="loginUsername" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+      <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+      <button class="primary full" type="submit">Sign in securely</button>
       <div id="loginError" class="error-text" role="alert"></div>
     </form>
   </section>
@@ -57,46 +29,11 @@
     <form id="passwordForm" class="auth-card">
       <div class="logo">NX</div>
       <h2>Create a private password</h2>
-      <p>
-        Replace the temporary password before using Nexus POS.
-      </p>
-
-      <label>
-        Current password
-        <input
-          id="currentPassword"
-          type="password"
-          autocomplete="current-password"
-          required
-        >
-      </label>
-
-      <label>
-        New password
-        <input
-          id="newPassword"
-          type="password"
-          autocomplete="new-password"
-          minlength="12"
-          required
-        >
-      </label>
-
-      <label>
-        Confirm new password
-        <input
-          id="confirmPassword"
-          type="password"
-          autocomplete="new-password"
-          minlength="12"
-          required
-        >
-      </label>
-
-      <button class="primary full" type="submit">
-        Save private password
-      </button>
-
+      <p>Replace the temporary password before using Nexus POS.</p>
+      <label>Current password<input id="currentPassword" type="password" autocomplete="current-password" required></label>
+      <label>New password<input id="newPassword" type="password" autocomplete="new-password" minlength="12" required></label>
+      <label>Confirm new password<input id="confirmPassword" type="password" autocomplete="new-password" minlength="12" required></label>
+      <button class="primary full" type="submit">Save private password</button>
       <div id="passwordError" class="error-text" role="alert"></div>
     </form>
   </section>
@@ -106,48 +43,20 @@
       <div class="sidebar-head">
         <div class="brand">
           <div class="logo small">NX</div>
-          <div>
-            <strong>Nexus POS</strong>
-            <span>Enterprise operations</span>
-          </div>
+          <div><strong>Nexus POS</strong><span>Enterprise operations</span></div>
         </div>
-
-        <button
-          id="sidebarCollapse"
-          class="sidebar-collapse"
-          type="button"
-          aria-label="Collapse navigation"
-          title="Collapse navigation"
-        >
-          ‹
-        </button>
-
-        <button
-          id="sidebarClose"
-          class="sidebar-close"
-          type="button"
-          aria-label="Close navigation"
-        >
-          ×
-        </button>
+        <button id="sidebarCollapse" class="sidebar-collapse" type="button" aria-label="Collapse navigation" title="Collapse navigation">‹</button>
+        <button id="sidebarClose" class="sidebar-close" type="button" aria-label="Close navigation">×</button>
       </div>
 
       <div id="shopContext" class="shop-context-card">
-        <div class="shop-context-copy">
-          <small>Active branch</small>
-          <strong>Loading…</strong>
-        </div>
+        <div class="shop-context-copy"><small>Active branch</small><strong>Loading…</strong></div>
       </div>
 
       <label class="nav-filter">
         <span class="nav-filter-mark" aria-hidden="true">⌕</span>
         <span class="hidden">Filter modules</span>
-        <input
-          id="navSearch"
-          type="search"
-          placeholder="Find a module"
-          autocomplete="off"
-        >
+        <input id="navSearch" type="search" placeholder="Find a module" autocomplete="off">
       </label>
 
       <nav id="navigation" aria-label="Nexus modules"></nav>
@@ -155,9 +64,7 @@
       <div class="account">
         <strong id="userName"></strong>
         <span id="userRole"></span>
-        <button id="logoutButton" type="button">
-          Sign out
-        </button>
+        <button id="logoutButton" type="button">Sign out</button>
       </div>
     </aside>
 
@@ -166,52 +73,23 @@
     <main>
       <header class="topbar">
         <div class="topbar-left">
-          <button
-            id="mobileMenuButton"
-            class="mobile-menu-button"
-            type="button"
-            aria-label="Open navigation"
-          >
-            ☰
-          </button>
-
+          <button id="mobileMenuButton" class="mobile-menu-button" type="button" aria-label="Open navigation">☰</button>
           <div class="topbar-title">
             <h1 id="pageTitle">Command centre</h1>
-            <p id="pageSubtitle">
-              Live business control and operational intelligence
-            </p>
+            <p id="pageSubtitle">Live business control and operational intelligence</p>
           </div>
         </div>
 
         <div class="topbar-actions">
-          <button
-            id="globalCommand"
-            class="command-button"
-            type="button"
-            aria-label="Open module command palette"
-          >
-            <span class="command-label">Find a module</span>
-            <kbd>Ctrl K</kbd>
+          <button id="globalCommand" class="command-button" type="button" aria-label="Open module command palette">
+            <span class="command-label">Find a module</span><kbd>Ctrl K</kbd>
           </button>
-
-          <div id="networkStatus" class="network-pill online">
-            <span class="network-dot" aria-hidden="true"></span>
-            <span>Connected</span>
-          </div>
-
-          <div id="shiftStatus" class="pill">
-            No open shift
-          </div>
+          <div id="networkStatus" class="network-pill online"><span class="network-dot" aria-hidden="true"></span><span>Connected</span></div>
+          <div id="shiftStatus" class="pill">No open shift</div>
         </div>
       </header>
 
-      <div
-        id="message"
-        class="message hidden"
-        role="status"
-        aria-live="polite"
-      ></div>
-
+      <div id="message" class="message hidden" role="status" aria-live="polite"></div>
       <section id="page" tabindex="-1"></section>
     </main>
   </div>
@@ -220,19 +98,8 @@
     <div class="command-dialog-header">
       <span aria-hidden="true">⌕</span>
       <label class="hidden" for="commandSearch">Search modules</label>
-      <input
-        id="commandSearch"
-        type="search"
-        placeholder="Search sales, stock, accounting, CRM, HRM…"
-        autocomplete="off"
-      >
-      <button
-        id="commandClose"
-        type="button"
-        aria-label="Close command palette"
-      >
-        ×
-      </button>
+      <input id="commandSearch" type="search" placeholder="Search sales, stock, accounting, CRM, HRM…" autocomplete="off">
+      <button id="commandClose" type="button" aria-label="Close command palette">×</button>
     </div>
     <div id="commandResults" class="command-results"></div>
   </dialog>
@@ -242,5 +109,6 @@
   <script src="/system-admin.js" defer></script>
   <script src="/owner-dashboard.js" defer></script>
   <script src="/experience.js" defer></script>
+  <script src="/transactional-workspaces.js" defer></script>
 </body>
 </html>

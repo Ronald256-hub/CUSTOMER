@@ -5,7 +5,8 @@ namespace Robo.Pos.Server.Data;
 
 /// <summary>
 /// Applies the additive SaaS tenant-operations schema after HRM.
-/// Existing organisations remain on the unlimited compatibility plan.
+/// Existing organisations remain on the unlimited compatibility plan,
+/// and tenant usage remains organisation-isolated.
 /// </summary>
 public static class SaasTenantOperationsMigration
 {

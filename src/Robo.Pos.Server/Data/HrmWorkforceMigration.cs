@@ -5,7 +5,8 @@ namespace Robo.Pos.Server.Data;
 
 /// <summary>
 /// Applies the additive HRM workforce-management schema after CRM.
-/// Existing users, shops and operational records remain unchanged.
+/// Existing users, shops and operational records remain unchanged, and the
+/// migration is repeat-safe for both upgraded and newly installed databases.
 /// </summary>
 public static class HrmWorkforceMigration
 {

@@ -2,11 +2,12 @@ $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $PSScriptRoot
 $script = Join-Path $root 'src/Robo.Pos.Server/wwwroot/people-finance-workspaces.js'
+$navigation = Join-Path $root 'src/Robo.Pos.Server/wwwroot/people-finance-navigation.js'
 $style = Join-Path $root 'src/Robo.Pos.Server/wwwroot/people-finance-workspaces.css'
 $index = Join-Path $root 'src/Robo.Pos.Server/wwwroot/index.html'
 $browser = Join-Path $root 'release-engineering/VERIFY_OPERATOR_EXPERIENCE_BROWSER.mjs'
 
-foreach ($path in @($script, $style, $index, $browser)) {
+foreach ($path in @($script, $navigation, $style, $index, $browser)) {
     if (-not (Test-Path $path -PathType Leaf)) {
         throw "Required CRM/finance/HRM workspace asset missing: $path"
     }
@@ -14,10 +15,13 @@ foreach ($path in @($script, $style, $index, $browser)) {
 
 node --check $script
 if ($LASTEXITCODE -ne 0) { throw 'CRM/finance/HRM JavaScript parsing failed.' }
+node --check $navigation
+if ($LASTEXITCODE -ne 0) { throw 'CRM/finance/HRM navigation JavaScript parsing failed.' }
 node --check $browser
 if ($LASTEXITCODE -ne 0) { throw 'Extended Microsoft Edge browser script parsing failed.' }
 
 $js = Get-Content $script -Raw
+$navigationText = Get-Content $navigation -Raw
 $css = Get-Content $style -Raw
 $html = Get-Content $index -Raw
 $browserText = Get-Content $browser -Raw
@@ -43,13 +47,28 @@ foreach ($token in $requiredJs) {
     }
 }
 
+$requiredNavigation = @(
+    'installPeopleFinanceRoutes',
+    'stopImmediatePropagation',
+    'HashChangeEvent',
+    'history.replaceState',
+    'crm:',
+    'finance:',
+    'hrm:'
+)
+foreach ($token in $requiredNavigation) {
+    if (-not $navigationText.Contains($token)) {
+        throw "Deterministic CRM/finance/HRM route bridge missing required token: $token"
+    }
+}
+
 foreach ($token in @('.pfh-workspace', '.pfh-grid', '.pfh-status', '@media (max-width: 620px)', 'prefers-reduced-motion')) {
     if (-not $css.Contains($token)) {
         throw "CRM/finance/HRM CSS missing required token: $token"
     }
 }
 
-foreach ($token in @('/people-finance-workspaces.css', '/people-finance-workspaces.js')) {
+foreach ($token in @('/people-finance-workspaces.css', '/people-finance-workspaces.js', '/people-finance-navigation.js')) {
     if (-not $html.Contains($token)) {
         throw "CRM/finance/HRM asset is not wired in index.html: $token"
     }

@@ -1,16 +1,19 @@
 name: Wire Nexus 6.1 operator experience
 
 on:
-  push:
+  pull_request:
+    types:
+      - opened
+      - synchronize
     branches:
-      - agent/operator-experience-command-centre
+      - main
 
 permissions:
   contents: write
 
 jobs:
   wire-operator-experience:
-    if: ${{ !contains(github.event.head_commit.message, '[operator-experience-wired]') }}
+    if: ${{ github.event.pull_request.head.ref == 'agent/operator-experience-command-centre' && !contains(github.event.pull_request.head.sha, '[operator-experience-wired]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

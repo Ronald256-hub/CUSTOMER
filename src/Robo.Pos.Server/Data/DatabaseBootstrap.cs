@@ -134,6 +134,10 @@ public sealed class DatabaseBootstrap
         await HrmWorkforceMigration.ApplyAsync(
             connection,
             cancellationToken);
+
+        await SaasTenantOperationsMigration.ApplyAsync(
+            connection,
+            cancellationToken);
     }
 
     public async Task<DatabaseStatus> GetStatusAsync(

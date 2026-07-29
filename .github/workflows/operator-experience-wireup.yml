@@ -1,0 +1,76 @@
+name: Wire Nexus 6.1 operator experience
+
+on:
+  push:
+    branches:
+      - agent/operator-experience-command-centre
+
+permissions:
+  contents: write
+
+jobs:
+  wire-operator-experience:
+    if: ${{ !contains(github.event.head_commit.message, '[operator-experience-wired]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/operator-experience-command-centre
+          fetch-depth: 0
+
+      - name: Register services endpoints and capabilities
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/Robo.Pos.Server/Program.cs')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = [
+              (
+                  'builder.Services.AddSingleton<ShopSalesReportingService>();\n',
+                  'builder.Services.AddSingleton<ShopSalesReportingService>();\n'
+                  'builder.Services.AddSingleton<ShortGlassMonitoringService>();\n'
+              ),
+              ('version = "6.0.0",', 'version = "6.1.0",'),
+              (
+                  '        "platform-saas-operations-dashboard"\n',
+                  '        "platform-saas-operations-dashboard",\n'
+                  '        "enterprise-operator-command-centre",\n'
+                  '        "role-aware-module-navigation",\n'
+                  '        "responsive-accessible-web-shell",\n'
+                  '        "global-module-command-palette",\n'
+                  '        "branch-short-glass-operational-report"\n'
+              ),
+              (
+                  'app.MapSalesEndpoints();\n',
+                  'app.MapSalesEndpoints();\n'
+                  'app.MapShortGlassMonitoringEndpoints();\n'
+              )
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected one occurrence of {old!r}, found {count}')
+              text = text.replace(old, new)
+
+          health_old = '            version = "6.0.0",'
+          if text.count(health_old) != 1:
+              raise SystemExit('Expected exactly one health version occurrence')
+          text = text.replace(health_old, '            version = "6.1.0",')
+
+          path.write_text(text, encoding='utf-8')
+          Path('.github/workflows/operator-experience-wireup.yml').unlink()
+          PY
+
+      - name: Commit durable wire-up
+        shell: bash
+        run: |
+          git config user.name "Nexus UI Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Wire Nexus 6.1 operator experience [operator-experience-wired]"
+          git push origin HEAD:agent/operator-experience-command-centre

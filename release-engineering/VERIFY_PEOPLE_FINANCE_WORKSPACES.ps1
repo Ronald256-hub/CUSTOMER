@@ -49,9 +49,11 @@ foreach ($token in $requiredJs) {
 
 $requiredNavigation = @(
     'installPeopleFinanceRoutes',
+    'activeRoute',
     'stopImmediatePropagation',
-    'HashChangeEvent',
     'history.replaceState',
+    'window.addEventListener("hashchange"',
+    'activateRoute(pageId, false)',
     'crm:',
     'finance:',
     'hrm:'
@@ -60,6 +62,9 @@ foreach ($token in $requiredNavigation) {
     if (-not $navigationText.Contains($token)) {
         throw "Deterministic CRM/finance/HRM route bridge missing required token: $token"
     }
+}
+if ($navigationText.Contains('HashChangeEvent')) {
+    throw 'Route bridge must not synthesize hashchange events or start competing enterprise renderers.'
 }
 
 foreach ($token in @('.pfh-workspace', '.pfh-grid', '.pfh-status', '@media (max-width: 620px)', 'prefers-reduced-motion')) {

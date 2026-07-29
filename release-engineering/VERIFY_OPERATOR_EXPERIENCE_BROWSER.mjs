@@ -52,7 +52,7 @@ try {
   await page.getByRole("button", { name: "Open module command palette" }).click();
   await page.getByLabel("Search modules").fill("inventory");
   await page.locator('#commandPalette [data-command-page="inventory"]').click();
-  await page.getByRole("heading", { name: "Inventory" }).waitFor();
+  await page.getByRole("heading", { name: "Inventory", exact: true }).waitFor();
   await page.getByText("Current inventory", { exact: true }).waitFor();
 
   await page.setViewportSize({ width: 390, height: 844 });

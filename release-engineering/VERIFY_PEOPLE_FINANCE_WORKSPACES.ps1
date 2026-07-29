@@ -55,7 +55,19 @@ foreach ($token in @('/people-finance-workspaces.css', '/people-finance-workspac
     }
 }
 
-foreach ($token in @('CRM transactional workspace', 'Customer profiles', 'Schedule follow-up', 'Receivables, payables and cashbook', 'Open supplier obligations', 'Posted cash movement', 'People, attendance, leave and payroll', 'Today’s attendance', 'Leave requests', 'Payroll periods')) {
+$browserAssertions = @(
+    'CRM transactional workspace',
+    'Customer profiles',
+    'Schedule follow-up',
+    'Receivables, payables and cashbook',
+    'Open supplier obligations',
+    'Posted cash movement',
+    'People, attendance, leave and payroll',
+    "Today’s attendance",
+    'Leave requests',
+    'Payroll periods'
+)
+foreach ($token in $browserAssertions) {
     if (-not $browserText.Contains($token)) {
         throw "Microsoft Edge journey missing workspace assertion: $token"
     }

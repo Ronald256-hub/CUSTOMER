@@ -1,0 +1,88 @@
+name: Validate transactional workspaces
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'release-engineering/VERIFY_TRANSACTIONAL_WORKSPACES.ps1'
+      - '.github/workflows/transactional-workspaces-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-transactional-workspaces:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Parse transactional workspace gate
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'release-engineering/VERIFY_TRANSACTIONAL_WORKSPACES.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            throw (($errors | ForEach-Object { $_.Message }) -join "`n")
+          }
+
+      - name: Verify transactional workspace source
+        shell: pwsh
+        run: |
+          & 'release-engineering/VERIFY_TRANSACTIONAL_WORKSPACES.ps1'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Apply verified source and build corrections
+        shell: pwsh
+        run: |
+          & 'release-engineering/APPLY_KNOWN_WINDOWS_BUILD_FIXES.ps1' -SourceRoot $PWD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and smoke-test Windows release
+        shell: pwsh
+        run: |
+          & '.\BUILD_WINDOWS_RELEASE.ps1' -Configuration Release -SkipInstaller *>&1 |
+            Tee-Object -FilePath 'transactional-workspaces-build.log'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify release artifacts
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem 'release' -Filter 'Nexus_POS_*_Portable.zip' -File | Select-Object -First 1
+          if (-not $zip) { throw 'Portable Nexus POS ZIP was not produced.' }
+          $manifest = 'release/SHA256SUMS.txt'
+          if (-not (Test-Path $manifest -PathType Leaf)) { throw 'SHA256SUMS.txt was not produced.' }
+          $line = Get-Content $manifest | Where-Object { $_ -like "*$($zip.Name)" } | Select-Object -First 1
+          if (-not $line) { throw 'Portable ZIP is missing from SHA256SUMS.txt.' }
+          $expected = ($line -split '\s+')[0].ToLowerInvariant()
+          $actual = (Get-FileHash $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw 'Portable ZIP checksum mismatch.' }
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-pos-transactional-workspace-diagnostics
+          path: |
+            transactional-workspaces-build.log
+            release/smoke-diagnostics-*/**
+          if-no-files-found: warn
+          retention-days: 7

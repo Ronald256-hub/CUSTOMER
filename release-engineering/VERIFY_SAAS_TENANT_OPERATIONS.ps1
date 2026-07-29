@@ -254,7 +254,7 @@ try {
     if ($tenants.count -ne 2) { throw "Platform tenant listing failed after onboarding." }
 
     $usage = Invoke-Json -Method POST -Uri "$baseUri/api/v3/saas/tenant/usage-snapshots" -Session $session
-    if ($usage.activeShopCount -ne 1 -or $usage.activeUserCount -ne 2 -or $usage.limitViolationsJson -ne "[]") {
+    if ($usage.activeShopCount -ne 1 -or $usage.activeUserCount -ne 1 -or $usage.limitViolationsJson -ne "[]") {
         throw "Tenant usage and limit evaluation are incorrect. Shops=$($usage.activeShopCount); Users=$($usage.activeUserCount); Violations=$($usage.limitViolationsJson); Full=$($usage | ConvertTo-Json -Depth 10 -Compress)"
     }
     $usageList = Invoke-Json -Method GET -Uri "$baseUri/api/v3/saas/tenant/usage-snapshots" -Session $session

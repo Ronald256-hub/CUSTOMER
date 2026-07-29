@@ -3,6 +3,7 @@ using Robo.Pos.Server.Finance;
 using Robo.Pos.Server.Procurement;
 using Robo.Pos.Server.Crm;
 using Robo.Pos.Server.Hrm;
+using Robo.Pos.Server.Saas;
 using Robo.Pos.Server.Business;
 using Robo.Pos.Server.Administration;
 using Robo.Pos.Server.Sales;
@@ -43,6 +44,7 @@ builder.Services.AddSingleton<FinanceService>();
 builder.Services.AddSingleton<ProcurementService>();
 builder.Services.AddSingleton<CrmService>();
 builder.Services.AddSingleton<HrmService>();
+builder.Services.AddSingleton<SaasService>();
 builder.Services.AddSingleton<AuditDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
 builder.Services.AddSingleton<ShopSalesService>();
@@ -69,6 +71,11 @@ var initialUserSeeder =
     app.Services.GetRequiredService<InitialUserSeeder>();
 
 await initialUserSeeder.SeedAsync();
+
+var saasBootstrap =
+    app.Services.GetRequiredService<SaasService>();
+
+await saasBootstrap.EnsureBootstrapAsync();
 
 app.Use(async (context, next) =>
 {
@@ -98,7 +105,7 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
 {
     application = "Nexus POS",
     service = "Production Server",
-    version = "5.9.0",
+    version = "6.0.0",
     status = "running",
     capabilities = new[]
     {
@@ -173,7 +180,19 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
         "employee-performance-reviews",
         "training-and-certification-records",
         "disciplinary-case-management",
-        "workforce-dashboard-and-analytics"
+        "workforce-dashboard-and-analytics",
+        "saas-plan-and-entitlement-management",
+        "organization-subscription-lifecycle",
+        "safe-tenant-onboarding",
+        "usage-and-limit-snapshots",
+        "optional-hard-shop-and-user-limits",
+        "immutable-subscription-event-ledger",
+        "external-billing-event-register",
+        "platform-operator-access-control",
+        "time-bound-support-access-grants",
+        "audited-support-case-workflow",
+        "tenant-health-snapshots",
+        "platform-saas-operations-dashboard"
     }
 }));
 
@@ -195,7 +214,7 @@ app.MapGet(
         {
             ok = true,
             application = "Nexus POS",
-            version = "5.9.0",
+            version = "6.0.0",
             instanceId,
             schemaVersion = status.SchemaVersion,
             database = status
@@ -287,6 +306,7 @@ app.MapFinanceEndpoints();
 app.MapProcurementEndpoints();
 app.MapCrmEndpoints();
 app.MapHrmEndpoints();
+app.MapSaasEndpoints();
 app.MapSalesEndpoints();
 app.MapAdminReferenceEndpoints();
 app.MapBusinessOperationsEndpoints();

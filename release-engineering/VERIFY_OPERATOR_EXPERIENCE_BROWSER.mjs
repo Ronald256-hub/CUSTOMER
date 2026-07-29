@@ -28,6 +28,12 @@ page.on("response", (response) => {
   if (response.status() >= 400) httpErrors.push({ status: response.status(), url: response.url() });
 });
 
+async function openModule(search, pageId) {
+  await page.getByRole("button", { name: "Open module command palette" }).click();
+  await page.getByLabel("Search modules").fill(search);
+  await page.locator(`#commandPalette [data-command-page="${pageId}"]`).click();
+}
+
 try {
   await page.goto(baseUri, { waitUntil: "networkidle" });
   await page.getByLabel("Username", { exact: true }).fill(username);
@@ -45,26 +51,49 @@ try {
   );
   if (desktopOverflow) throw new Error("The desktop application shell has horizontal overflow.");
 
-  await page.getByRole("button", { name: "Open module command palette" }).click();
-  await page.getByLabel("Search modules").fill("inventory");
-  await page.locator('#commandPalette [data-command-page="inventory"]').click();
+  await openModule("inventory", "inventory");
   await page.getByRole("heading", { name: "Inventory", exact: true }).waitFor();
   await page.getByRole("heading", { name: "Inventory movement centre", exact: true }).waitFor();
   await page.getByText("Branch stock cards", { exact: true }).waitFor();
   await page.getByLabel("Stock view").selectOption("low");
   await page.locator("#inventoryWorkspaceCount").waitFor();
 
-  await page.getByRole("button", { name: "Open module command palette" }).click();
-  await page.getByLabel("Search modules").fill("procurement");
-  await page.locator('#commandPalette [data-command-page="procurement"]').click();
+  await openModule("procurement", "procurement");
   await page.getByRole("heading", { name: "Procurement", exact: true }).waitFor();
   await page.getByRole("heading", { name: "Procurement workspace", exact: true }).waitFor();
   await page.getByRole("tab", { name: "Purchase orders" }).click();
   await page.getByRole("tab", { name: "Goods receipts" }).click();
   await page.getByText("Review need", { exact: true }).waitFor();
 
+  await openModule("customers", "crm");
+  await page.getByRole("heading", { name: "CRM transactional workspace", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Customer profiles", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Create customer profile" }).waitFor();
+  await page.getByRole("tab", { name: "Follow-ups" }).click();
+  await page.getByRole("heading", { name: "Schedule follow-up", exact: true }).waitFor();
+  await page.getByRole("tab", { name: "Quotations" }).click();
+  await page.getByRole("heading", { name: "Quotation pipeline", exact: true }).waitFor();
+
+  await openModule("receivables", "finance");
+  await page.getByRole("heading", { name: "Receivables, payables and cashbook", exact: true }).waitFor();
+  await page.getByRole("tab", { name: "Supplier obligations" }).click();
+  await page.getByRole("heading", { name: "Open supplier obligations", exact: true }).waitFor();
+  await page.getByRole("tab", { name: "Cashbook" }).click();
+  await page.getByRole("heading", { name: "Posted cash movement", exact: true }).waitFor();
+
+  await openModule("people", "hrm");
+  await page.getByRole("heading", { name: "People, attendance, leave and payroll", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Employee profiles", exact: true }).waitFor();
+  await page.getByRole("tab", { name: "Attendance" }).click();
+  await page.getByRole("heading", { name: "Today’s attendance", exact: true }).waitFor();
+  await page.getByRole("tab", { name: "Leave" }).click();
+  await page.getByRole("heading", { name: "Leave requests", exact: true }).waitFor();
+  await page.getByRole("tab", { name: "Payroll" }).click();
+  await page.getByRole("heading", { name: "Payroll periods", exact: true }).waitFor();
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "People, attendance, leave and payroll", exact: true }).waitFor();
   await page.getByRole("button", { name: "Open navigation" }).waitFor();
   await page.getByRole("button", { name: "Open navigation" }).click();
 
@@ -115,7 +144,7 @@ try {
     throw new Error(`Browser console errors: ${relevantConsoleErrors.join(" | ")}`);
   }
 
-  console.log("Nexus operator, inventory and procurement browser validation passed.");
+  console.log("Nexus operator, stock, CRM, finance and HRM browser validation passed.");
 } finally {
   await browser.close();
 }

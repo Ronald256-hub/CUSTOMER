@@ -16,12 +16,18 @@
     }
   };
 
-  function activateRoute(pageId) {
+  function activeRoute() {
+    const pageId = location.hash.replace(/^#/, "");
+    return routes[pageId] ? pageId : null;
+  }
+
+  function activateRoute(pageId, replaceHistory = true) {
     const route = routes[pageId];
     if (!route) return;
 
-    const oldUrl = location.href;
-    history.replaceState(null, "", `#${pageId}`);
+    if (replaceHistory && location.hash !== `#${pageId}`) {
+      history.replaceState(null, "", `#${pageId}`);
+    }
 
     const title = document.querySelector("#pageTitle");
     const subtitle = document.querySelector("#pageSubtitle");
@@ -36,8 +42,7 @@
       else button.removeAttribute("aria-current");
     });
 
-    const application = document.querySelector("#application");
-    application?.classList.remove("sidebar-open");
+    document.querySelector("#application")?.classList.remove("sidebar-open");
 
     const palette = document.querySelector("#commandPalette");
     if (palette?.open) palette.close();
@@ -48,11 +53,6 @@
       delete page.dataset.pfhWorkspace;
       page.innerHTML = '<div class="page-loading" aria-live="polite"><div class="skeleton"></div><div class="skeleton" style="min-height:340px"></div></div>';
     }
-
-    window.dispatchEvent(new HashChangeEvent("hashchange", {
-      oldURL: oldUrl,
-      newURL: location.href
-    }));
   }
 
   document.addEventListener("click", (event) => {
@@ -63,5 +63,13 @@
     event.preventDefault();
     event.stopImmediatePropagation();
     activateRoute(pageId);
+  }, true);
+
+  window.addEventListener("hashchange", (event) => {
+    const pageId = activeRoute();
+    if (!pageId) return;
+
+    event.stopImmediatePropagation();
+    activateRoute(pageId, false);
   }, true);
 })();

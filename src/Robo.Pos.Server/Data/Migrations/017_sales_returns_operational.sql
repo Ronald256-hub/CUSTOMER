@@ -1,3 +1,57 @@
+DROP TRIGGER IF EXISTS trg_sale_item_update_guard;
+
+CREATE TRIGGER trg_sale_item_update_guard
+BEFORE UPDATE OF
+    sale_id,
+    product_id,
+    product_name_snapshot,
+    sku_snapshot,
+    barcode_snapshot,
+    quantity,
+    sale_unit_snapshot,
+    unit_size_ml_snapshot,
+    base_units_deducted,
+    unit_cost_minor,
+    unit_price_minor,
+    discount_minor,
+    line_total_minor
+ON sale_items
+WHEN EXISTS
+(
+    SELECT 1
+    FROM accounting_operational_links
+    WHERE source_type = 'sale'
+      AND source_id = OLD.sale_id
+)
+BEGIN
+    SELECT RAISE(ABORT, 'posted sale item financial values are immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_sale_item_return_counter_guard
+BEFORE UPDATE OF returned_quantity ON sale_items
+BEGIN
+    SELECT CASE
+        WHEN NEW.returned_quantity < OLD.returned_quantity
+          OR NEW.returned_quantity > OLD.quantity
+        THEN RAISE(ABORT, 'sale item returned quantity is invalid')
+    END;
+
+    SELECT CASE
+        WHEN NEW.returned_quantity > OLD.returned_quantity
+         AND NOT EXISTS
+        (
+            SELECT 1
+            FROM sales_return_items AS return_item
+            INNER JOIN sales_returns AS header
+                ON header.id = return_item.return_id
+            WHERE return_item.sale_item_id = OLD.id
+              AND header.status = 'draft'
+              AND OLD.returned_quantity + return_item.quantity = NEW.returned_quantity
+        )
+        THEN RAISE(ABORT, 'sale item return counter requires a matching draft return')
+    END;
+END;
+
 CREATE TRIGGER IF NOT EXISTS trg_shift_close_return_aware_cash
 AFTER UPDATE OF status ON teller_shifts
 WHEN OLD.status = 'open' AND NEW.status = 'closed'

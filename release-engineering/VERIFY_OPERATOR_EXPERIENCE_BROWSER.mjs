@@ -116,9 +116,23 @@ try {
   await page.getByRole("button", { name: "Export CSV", exact: true }).waitFor();
   await page.getByRole("button", { name: "Print", exact: true }).waitFor();
 
+  await openModule("returns", "sales-returns");
+  await page.getByRole("heading", { name: "Sales returns and refunds", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Eligible receipts", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Recent credit notes", exact: true }).waitFor();
+  await page.getByLabel("Find receipt").fill("Nexus");
+  await page.getByText("Accounting mode", { exact: true }).waitFor();
+  await page.getByText("Atomic", { exact: true }).waitFor();
+
+  const returnsDesktopOverflow = await page.evaluate(() =>
+    document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+  );
+  if (returnsDesktopOverflow) throw new Error("The sales returns desktop workspace has horizontal overflow.");
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload({ waitUntil: "networkidle" });
-  await page.getByRole("heading", { name: "Approvals and exception centre", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Sales returns and refunds", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Eligible receipts", exact: true }).waitFor();
   await page.getByRole("button", { name: "Open navigation" }).waitFor();
   await page.getByRole("button", { name: "Open navigation" }).click();
 
@@ -169,7 +183,7 @@ try {
     throw new Error(`Browser console errors: ${relevantConsoleErrors.join(" | ")}`);
   }
 
-  console.log("Nexus operator, stock, CRM, finance, HRM, executive intelligence and approvals browser validation passed.");
+  console.log("Nexus operator, stock, CRM, finance, HRM, intelligence, approvals and sales returns browser validation passed.");
 } finally {
   await browser.close();
 }

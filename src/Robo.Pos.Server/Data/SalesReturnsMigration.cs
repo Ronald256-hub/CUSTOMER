@@ -7,6 +7,12 @@ public static class SalesReturnsMigration
 {
     public const int Version = 17;
 
+    private static readonly string[] ResourceSuffixes =
+    {
+        "017_sales_returns_refunds.sql",
+        "017_sales_returns_operational.sql"
+    };
+
     public static async Task ApplyAsync(
         SqliteConnection connection,
         CancellationToken cancellationToken = default)
@@ -28,23 +34,13 @@ public static class SalesReturnsMigration
         }
 
         Assembly assembly = typeof(SalesReturnsMigration).Assembly;
-        string[] resourceNames = assembly
-            .GetManifestResourceNames()
-            .Where(name => name.Contains(
-                ".017_sales_returns_",
-                StringComparison.Ordinal))
-            .OrderBy(name => name, StringComparer.Ordinal)
-            .ToArray();
-
-        if (resourceNames.Length != 2)
+        string[] names = assembly.GetManifestResourceNames();
+        var sql = new List<string>(ResourceSuffixes.Length);
+        foreach (string suffix in ResourceSuffixes)
         {
-            throw new InvalidOperationException(
-                $"Expected two sales-return migration resources, found {resourceNames.Length}.");
-        }
-
-        var sql = new List<string>(resourceNames.Length);
-        foreach (string resourceName in resourceNames)
-        {
+            string resourceName = names.Single(name => name.EndsWith(
+                suffix,
+                StringComparison.Ordinal));
             await using Stream stream =
                 assembly.GetManifestResourceStream(resourceName)
                 ?? throw new InvalidOperationException(

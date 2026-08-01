@@ -247,10 +247,10 @@ public sealed class ShopShiftService
         }
 
         long cashSales;
-        await using (var calculate = connection.CreateCommand())
+        await using (var calculateSales = connection.CreateCommand())
         {
-            calculate.Transaction = transaction;
-            calculate.CommandText =
+            calculateSales.Transaction = transaction;
+            calculateSales.CommandText =
             """
             SELECT COALESCE(SUM(payment.amount_minor), 0)
             FROM sale_payments AS payment
@@ -258,16 +258,35 @@ public sealed class ShopShiftService
                 ON sale.id = payment.sale_id
             WHERE sale.shift_id = $shiftId
               AND sale.shop_id = $shopId
-              AND sale.status = 'completed'
+              AND sale.status IN ('completed', 'partially_returned', 'returned')
               AND payment.payment_method = 'cash';
             """;
-            calculate.Parameters.AddWithValue("$shiftId", shiftId);
-            calculate.Parameters.AddWithValue("$shopId", context.ShopId);
+            calculateSales.Parameters.AddWithValue("$shiftId", shiftId);
+            calculateSales.Parameters.AddWithValue("$shopId", context.ShopId);
             cashSales = Convert.ToInt64(
-                await calculate.ExecuteScalarAsync(cancellationToken));
+                await calculateSales.ExecuteScalarAsync(cancellationToken));
         }
 
-        long expectedCash = checked(openingCash + cashSales);
+        long cashRefunds;
+        await using (var calculateRefunds = connection.CreateCommand())
+        {
+            calculateRefunds.Transaction = transaction;
+            calculateRefunds.CommandText =
+            """
+            SELECT COALESCE(SUM(refund_amount_minor), 0)
+            FROM sales_returns
+            WHERE shift_id = $shiftId
+              AND shop_id = $shopId
+              AND status = 'completed'
+              AND refund_method = 'cash';
+            """;
+            calculateRefunds.Parameters.AddWithValue("$shiftId", shiftId);
+            calculateRefunds.Parameters.AddWithValue("$shopId", context.ShopId);
+            cashRefunds = Convert.ToInt64(
+                await calculateRefunds.ExecuteScalarAsync(cancellationToken));
+        }
+
+        long expectedCash = checked(openingCash + cashSales - cashRefunds);
         long variance = checked(request.CountedCashMinor - expectedCash);
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
@@ -321,6 +340,7 @@ public sealed class ShopShiftService
                 context.ShopCode,
                 openingCash,
                 cashSales,
+                cashRefunds,
                 expectedCash,
                 countedCash = request.CountedCashMinor,
                 variance

@@ -46,6 +46,7 @@ builder.Services.AddSingleton<CrmService>();
 builder.Services.AddSingleton<HrmService>();
 builder.Services.AddSingleton<SaasService>();
 builder.Services.AddSingleton<AuditDocumentWriter>();
+builder.Services.AddSingleton<SalesReturnDocumentWriter>();
 builder.Services.AddSingleton<SalesService>();
 builder.Services.AddSingleton<ShopSalesService>();
 builder.Services.AddSingleton<ShopShiftService>();
@@ -55,6 +56,7 @@ builder.Services.AddSingleton<ShopSalesReportingService>();
 builder.Services.AddSingleton<ShortGlassMonitoringService>();
 builder.Services.AddSingleton<SaleVoidService>();
 builder.Services.AddSingleton<ShopSaleVoidService>();
+builder.Services.AddSingleton<SalesReturnService>();
 builder.Services.AddSingleton<BusinessOperationsService>();
 builder.Services.AddSingleton<SystemAdministrationService>();
 
@@ -106,7 +108,7 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
 {
     application = "Nexus POS",
     service = "Production Server",
-    version = "6.1.0",
+    version = "6.7.0",
     status = "running",
     capabilities = new[]
     {
@@ -117,6 +119,14 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
         "shop-scoped-stock-adjustments",
         "shop-scoped-sale-deduction",
         "shop-scoped-sale-void-restoration",
+        "controlled-partial-sales-returns",
+        "same-channel-customer-refunds",
+        "return-stock-disposition",
+        "immutable-sales-return-register",
+        "automatic-sales-return-accounting",
+        "printable-credit-notes",
+        "return-aware-shift-reconciliation",
+        "return-aware-sales-reporting",
         "shop-scoped-teller-shifts",
         "shop-scoped-receipt-numbering",
         "audited-receipt-reprints",
@@ -220,7 +230,7 @@ app.MapGet(
         {
             ok = true,
             application = "Nexus POS",
-            version = "6.1.0",
+            version = "6.7.0",
             instanceId,
             schemaVersion = status.SchemaVersion,
             database = status
@@ -314,6 +324,7 @@ app.MapCrmEndpoints();
 app.MapHrmEndpoints();
 app.MapSaasEndpoints();
 app.MapSalesEndpoints();
+app.MapSalesReturnEndpoints();
 app.MapShortGlassMonitoringEndpoints();
 app.MapAdminReferenceEndpoints();
 app.MapBusinessOperationsEndpoints();

@@ -91,9 +91,23 @@ try {
   await page.getByRole("tab", { name: "Payroll" }).click();
   await page.getByRole("heading", { name: "Payroll periods", exact: true }).waitFor();
 
+  await page.getByRole("button", { name: "Executive intelligence" }).click();
+  await page.getByRole("heading", { name: "Executive intelligence control tower", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Business performance pulse", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Payment mix", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Risk radar", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Short-glass quantity and revenue watch", exact: true }).waitFor();
+  await page.getByLabel("Reporting scope").selectOption("shop");
+  await page.getByRole("button", { name: "Refresh intelligence" }).click();
+  await page.getByText("Active branch", { exact: true }).last().waitFor();
+  await page.getByRole("button", { name: "Last 7 days" }).click();
+  await page.getByRole("heading", { name: "Executive intelligence control tower", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Export intelligence CSV" }).waitFor();
+  await page.getByRole("button", { name: "Print control tower" }).waitFor();
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload({ waitUntil: "networkidle" });
-  await page.getByRole("heading", { name: "People, attendance, leave and payroll", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Executive intelligence control tower", exact: true }).waitFor();
   await page.getByRole("button", { name: "Open navigation" }).waitFor();
   await page.getByRole("button", { name: "Open navigation" }).click();
 
@@ -144,7 +158,7 @@ try {
     throw new Error(`Browser console errors: ${relevantConsoleErrors.join(" | ")}`);
   }
 
-  console.log("Nexus operator, stock, CRM, finance and HRM browser validation passed.");
+  console.log("Nexus operator, stock, CRM, finance, HRM and executive intelligence browser validation passed.");
 } finally {
   await browser.close();
 }

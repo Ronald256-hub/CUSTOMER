@@ -11,6 +11,7 @@ $required = @{
     Endpoints = Join-Path $root 'src/Robo.Pos.Server/Sales/SalesReturnEndpoints.cs'
     DocumentWriter = Join-Path $root 'src/Robo.Pos.Server/Sales/SalesReturnDocumentWriter.cs'
     Reporting = Join-Path $root 'src/Robo.Pos.Server/Sales/ShopSalesReportingService.cs'
+    ShiftService = Join-Path $root 'src/Robo.Pos.Server/Sales/ShopShiftService.cs'
     Program = Join-Path $root 'src/Robo.Pos.Server/Program.cs'
     Workspace = Join-Path $root 'src/Robo.Pos.Server/wwwroot/sales-returns.js'
     Navigation = Join-Path $root 'src/Robo.Pos.Server/wwwroot/sales-returns-navigation.js'
@@ -145,6 +146,19 @@ foreach ($token in @(
 }
 
 foreach ($token in @(
+    "sale.status IN ('completed', 'partially_returned', 'returned')",
+    "refund_method = 'cash'",
+    'long cashRefunds',
+    'openingCash + cashSales - cashRefunds',
+    'cashRefunds,'
+    'shift.closed'
+)) {
+    if (-not $text.ShiftService.Contains($token)) {
+        throw "Return-aware shift reconciliation or audit missing token: $token"
+    }
+}
+
+foreach ($token in @(
     'version = "6.7.0"',
     'controlled-partial-sales-returns',
     'same-channel-customer-refunds',
@@ -239,6 +253,7 @@ foreach ($token in @(
     'return_quantity_exceeds_remaining',
     'Assert-ReturnJournal',
     'restockedBaseUnits',
+    'quantityDeltaBaseUnits',
     'grossSalesMinor',
     'returnedSalesMinor',
     'grossCostOfGoodsSoldMinor',
@@ -250,4 +265,4 @@ foreach ($token in @(
     }
 }
 
-Write-Host 'Sales-return schema, service, accounting, reporting, UI, routing and transaction assertions passed.'
+Write-Host 'Sales-return schema, service, accounting, reporting, cash audit, UI, routing and transaction assertions passed.'

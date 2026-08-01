@@ -1,0 +1,43 @@
+.approvals-exception-workspace {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.exception-control-panel,
+.exception-tabs,
+.exception-card,
+.exception-card-main,
+.exception-card-heading,
+.exception-card-meta,
+.exception-card-meta span {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.exception-control-panel {
+  overflow: hidden;
+}
+
+.exception-tabs {
+  width: 100%;
+}
+
+.exception-card-heading h3,
+.exception-card-main > p,
+.exception-card-meta span {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 680px) {
+  .exception-card {
+    width: 100%;
+  }
+
+  .exception-card-action,
+  .exception-card-action button {
+    min-width: 0;
+    max-width: 100%;
+  }
+}

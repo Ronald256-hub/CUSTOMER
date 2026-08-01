@@ -105,9 +105,20 @@ try {
   await page.getByRole("button", { name: "Export intelligence CSV" }).waitFor();
   await page.getByRole("button", { name: "Print control tower" }).waitFor();
 
+  await openModule("approvals", "exceptions");
+  await page.getByRole("heading", { name: "Approvals and exception centre", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Priority queue", exact: true }).waitFor();
+  await page.getByRole("tab", { name: "Approvals", exact: true }).click();
+  await page.getByLabel("Severity").selectOption("urgent");
+  await page.locator("#exceptionVisibleCount").waitFor();
+  await page.getByRole("button", { name: "Refresh centre", exact: true }).click();
+  await page.getByRole("heading", { name: "Approvals and exception centre", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Export CSV", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Print", exact: true }).waitFor();
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload({ waitUntil: "networkidle" });
-  await page.getByRole("heading", { name: "Executive intelligence control tower", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Approvals and exception centre", exact: true }).waitFor();
   await page.getByRole("button", { name: "Open navigation" }).waitFor();
   await page.getByRole("button", { name: "Open navigation" }).click();
 
@@ -158,7 +169,7 @@ try {
     throw new Error(`Browser console errors: ${relevantConsoleErrors.join(" | ")}`);
   }
 
-  console.log("Nexus operator, stock, CRM, finance, HRM and executive intelligence browser validation passed.");
+  console.log("Nexus operator, stock, CRM, finance, HRM, executive intelligence and approvals browser validation passed.");
 } finally {
   await browser.close();
 }

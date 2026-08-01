@@ -11,14 +11,22 @@ public sealed record ShopSalesSummaryRow(
     string ShopName,
     long CompletedSalesCount,
     long VoidedSalesCount,
+    long ReturnCount,
     long GrossSalesMinor,
     long VoidedSalesMinor,
+    long ReturnedSalesMinor,
+    long NetSalesMinor,
+    long GrossCostOfGoodsSoldMinor,
+    long RestockedCostMinor,
     long CostOfGoodsSoldMinor,
     long GrossProfitMinor);
 
 public sealed record PaymentSalesSummaryRow(
     string PaymentMethod,
     long SaleCount,
+    long ReturnCount,
+    long GrossAmountMinor,
+    long RefundedAmountMinor,
     long AmountMinor);
 
 public sealed record SalesSummaryReport(
@@ -31,9 +39,13 @@ public sealed record SalesSummaryReport(
     DateTimeOffset ToUtc,
     long CompletedSalesCount,
     long VoidedSalesCount,
+    long ReturnCount,
     long GrossSalesMinor,
     long VoidedSalesMinor,
+    long ReturnedSalesMinor,
     long NetSalesMinor,
+    long GrossCostOfGoodsSoldMinor,
+    long RestockedCostMinor,
     long CostOfGoodsSoldMinor,
     long GrossProfitMinor,
     IReadOnlyList<ShopSalesSummaryRow> Shops,
@@ -119,9 +131,14 @@ public sealed class ShopSalesReportingService
 
         long completedCount = shops.Sum(row => row.CompletedSalesCount);
         long voidedCount = shops.Sum(row => row.VoidedSalesCount);
+        long returnCount = shops.Sum(row => row.ReturnCount);
         long grossSales = shops.Sum(row => row.GrossSalesMinor);
         long voidedSales = shops.Sum(row => row.VoidedSalesMinor);
-        long costOfGoods = shops.Sum(row => row.CostOfGoodsSoldMinor);
+        long returnedSales = shops.Sum(row => row.ReturnedSalesMinor);
+        long netSales = shops.Sum(row => row.NetSalesMinor);
+        long grossCost = shops.Sum(row => row.GrossCostOfGoodsSoldMinor);
+        long restockedCost = shops.Sum(row => row.RestockedCostMinor);
+        long netCost = shops.Sum(row => row.CostOfGoodsSoldMinor);
         long grossProfit = shops.Sum(row => row.GrossProfitMinor);
 
         return new SalesSummaryReport(
@@ -134,10 +151,14 @@ public sealed class ShopSalesReportingService
             toUtc,
             completedCount,
             voidedCount,
+            returnCount,
             grossSales,
             voidedSales,
-            grossSales,
-            costOfGoods,
+            returnedSales,
+            netSales,
+            grossCost,
+            restockedCost,
+            netCost,
             grossProfit,
             shops,
             payments);
@@ -159,54 +180,78 @@ public sealed class ShopSalesReportingService
         (
             SELECT
                 item.sale_id,
-                COALESCE(SUM(item.unit_cost_minor * item.quantity), 0)
-                    AS cost_minor
+                COALESCE(SUM(item.unit_cost_minor * item.quantity), 0) AS cost_minor
             FROM sale_items AS item
             GROUP BY item.sale_id
+        ),
+        sales_in_period AS
+        (
+            SELECT
+                sale.shop_id,
+                COUNT(CASE WHEN sale.status IN ('completed', 'partially_returned', 'returned') THEN 1 END) AS sale_count,
+                COUNT(CASE WHEN sale.status = 'voided' THEN 1 END) AS void_count,
+                COALESCE(SUM(CASE
+                    WHEN sale.status IN ('completed', 'partially_returned', 'returned')
+                    THEN sale.total_minor ELSE 0 END), 0) AS gross_sales_minor,
+                COALESCE(SUM(CASE
+                    WHEN sale.status = 'voided'
+                    THEN sale.total_minor ELSE 0 END), 0) AS voided_sales_minor,
+                COALESCE(SUM(CASE
+                    WHEN sale.status IN ('completed', 'partially_returned', 'returned')
+                    THEN COALESCE(cost.cost_minor, 0) ELSE 0 END), 0) AS gross_cost_minor
+            FROM sales AS sale
+            LEFT JOIN sale_costs AS cost
+                ON cost.sale_id = sale.id
+            WHERE COALESCE(sale.completed_at_utc, sale.created_at_utc) >= $fromUtc
+              AND COALESCE(sale.completed_at_utc, sale.created_at_utc) < $toUtc
+            GROUP BY sale.shop_id
+        ),
+        returns_in_period AS
+        (
+            SELECT
+                header.shop_id,
+                COUNT(*) AS return_count,
+                COALESCE(SUM(header.refund_amount_minor), 0) AS refund_minor,
+                COALESCE(SUM(header.restocked_cost_minor), 0) AS restocked_cost_minor
+            FROM sales_returns AS header
+            WHERE header.status = 'completed'
+              AND header.completed_at_utc >= $fromUtc
+              AND header.completed_at_utc < $toUtc
+            GROUP BY header.shop_id
         )
         SELECT
             shop.id,
             shop.code,
             shop.name,
-            COALESCE(SUM(
-                CASE WHEN sale.status = 'completed' THEN 1 ELSE 0 END), 0),
-            COALESCE(SUM(
-                CASE WHEN sale.status = 'voided' THEN 1 ELSE 0 END), 0),
-            COALESCE(SUM(
-                CASE WHEN sale.status = 'completed'
-                    THEN sale.total_minor ELSE 0 END), 0),
-            COALESCE(SUM(
-                CASE WHEN sale.status = 'voided'
-                    THEN sale.total_minor ELSE 0 END), 0),
-            COALESCE(SUM(
-                CASE WHEN sale.status = 'completed'
-                    THEN COALESCE(cost.cost_minor, 0) ELSE 0 END), 0)
+            COALESCE(sales.sale_count, 0),
+            COALESCE(sales.void_count, 0),
+            COALESCE(refunds.return_count, 0),
+            COALESCE(sales.gross_sales_minor, 0),
+            COALESCE(sales.voided_sales_minor, 0),
+            COALESCE(refunds.refund_minor, 0),
+            COALESCE(sales.gross_cost_minor, 0),
+            COALESCE(refunds.restocked_cost_minor, 0)
         FROM shops AS shop
-        LEFT JOIN sales AS sale
-            ON sale.shop_id = shop.id
-           AND COALESCE(sale.completed_at_utc, sale.created_at_utc) >= $fromUtc
-           AND COALESCE(sale.completed_at_utc, sale.created_at_utc) < $toUtc
-        LEFT JOIN sale_costs AS cost
-            ON cost.sale_id = sale.id
+        LEFT JOIN sales_in_period AS sales
+            ON sales.shop_id = shop.id
+        LEFT JOIN returns_in_period AS refunds
+            ON refunds.shop_id = shop.id
         WHERE shop.organization_id = $organizationId
           AND ($consolidated = 1 OR shop.id = $shopId)
-        GROUP BY shop.id, shop.code, shop.name
         ORDER BY shop.is_head_office DESC, shop.name COLLATE NOCASE;
         """;
-        AddScopeParameters(
-            command,
-            context,
-            consolidated,
-            fromUtc,
-            toUtc);
+        AddScopeParameters(command, context, consolidated, fromUtc, toUtc);
 
         var rows = new List<ShopSalesSummaryRow>();
-        await using var reader =
-            await command.ExecuteReaderAsync(cancellationToken);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            long grossSales = reader.GetInt64(5);
-            long costOfGoods = reader.GetInt64(7);
+            long grossSales = reader.GetInt64(6);
+            long returnedSales = reader.GetInt64(8);
+            long grossCost = reader.GetInt64(9);
+            long restockedCost = reader.GetInt64(10);
+            long netSales = checked(grossSales - returnedSales);
+            long netCost = checked(grossCost - restockedCost);
 
             rows.Add(new ShopSalesSummaryRow(
                 reader.GetString(0),
@@ -214,10 +259,15 @@ public sealed class ShopSalesReportingService
                 reader.GetString(2),
                 reader.GetInt64(3),
                 reader.GetInt64(4),
+                reader.GetInt64(5),
                 grossSales,
-                reader.GetInt64(6),
-                costOfGoods,
-                checked(grossSales - costOfGoods)));
+                reader.GetInt64(7),
+                returnedSales,
+                netSales,
+                grossCost,
+                restockedCost,
+                netCost,
+                checked(netSales - netCost)));
         }
 
         return rows;
@@ -235,39 +285,74 @@ public sealed class ShopSalesReportingService
         await using var command = connection.CreateCommand();
         command.CommandText =
         """
+        WITH gross AS
+        (
+            SELECT
+                payment.payment_method,
+                COUNT(DISTINCT sale.id) AS sale_count,
+                COALESCE(SUM(payment.amount_minor), 0) AS gross_minor
+            FROM sale_payments AS payment
+            INNER JOIN sales AS sale
+                ON sale.id = payment.sale_id
+            INNER JOIN shops AS shop
+                ON shop.id = sale.shop_id
+            WHERE shop.organization_id = $organizationId
+              AND ($consolidated = 1 OR sale.shop_id = $shopId)
+              AND sale.status IN ('completed', 'partially_returned', 'returned')
+              AND COALESCE(sale.completed_at_utc, sale.created_at_utc) >= $fromUtc
+              AND COALESCE(sale.completed_at_utc, sale.created_at_utc) < $toUtc
+            GROUP BY payment.payment_method
+        ),
+        refunds AS
+        (
+            SELECT
+                header.refund_method AS payment_method,
+                COUNT(*) AS return_count,
+                COALESCE(SUM(header.refund_amount_minor), 0) AS refund_minor
+            FROM sales_returns AS header
+            INNER JOIN shops AS shop
+                ON shop.id = header.shop_id
+            WHERE shop.organization_id = $organizationId
+              AND ($consolidated = 1 OR header.shop_id = $shopId)
+              AND header.status = 'completed'
+              AND header.completed_at_utc >= $fromUtc
+              AND header.completed_at_utc < $toUtc
+            GROUP BY header.refund_method
+        ),
+        methods AS
+        (
+            SELECT payment_method FROM gross
+            UNION
+            SELECT payment_method FROM refunds
+        )
         SELECT
-            payment.payment_method,
-            COUNT(DISTINCT sale.id),
-            COALESCE(SUM(payment.amount_minor), 0)
-        FROM sale_payments AS payment
-        INNER JOIN sales AS sale
-            ON sale.id = payment.sale_id
-        INNER JOIN shops AS shop
-            ON shop.id = sale.shop_id
-        WHERE shop.organization_id = $organizationId
-          AND ($consolidated = 1 OR sale.shop_id = $shopId)
-          AND sale.status = 'completed'
-          AND COALESCE(sale.completed_at_utc, sale.created_at_utc) >= $fromUtc
-          AND COALESCE(sale.completed_at_utc, sale.created_at_utc) < $toUtc
-        GROUP BY payment.payment_method
-        ORDER BY payment.payment_method;
+            methods.payment_method,
+            COALESCE(gross.sale_count, 0),
+            COALESCE(refunds.return_count, 0),
+            COALESCE(gross.gross_minor, 0),
+            COALESCE(refunds.refund_minor, 0)
+        FROM methods
+        LEFT JOIN gross
+            ON gross.payment_method = methods.payment_method
+        LEFT JOIN refunds
+            ON refunds.payment_method = methods.payment_method
+        ORDER BY methods.payment_method;
         """;
-        AddScopeParameters(
-            command,
-            context,
-            consolidated,
-            fromUtc,
-            toUtc);
+        AddScopeParameters(command, context, consolidated, fromUtc, toUtc);
 
         var rows = new List<PaymentSalesSummaryRow>();
-        await using var reader =
-            await command.ExecuteReaderAsync(cancellationToken);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
+            long gross = reader.GetInt64(3);
+            long refunded = reader.GetInt64(4);
             rows.Add(new PaymentSalesSummaryRow(
                 reader.GetString(0),
                 reader.GetInt64(1),
-                reader.GetInt64(2)));
+                reader.GetInt64(2),
+                gross,
+                refunded,
+                checked(gross - refunded)));
         }
 
         return rows;
@@ -280,13 +365,9 @@ public sealed class ShopSalesReportingService
         DateTimeOffset fromUtc,
         DateTimeOffset toUtc)
     {
-        command.Parameters.AddWithValue(
-            "$organizationId",
-            context.OrganizationId);
+        command.Parameters.AddWithValue("$organizationId", context.OrganizationId);
         command.Parameters.AddWithValue("$shopId", context.ShopId);
-        command.Parameters.AddWithValue(
-            "$consolidated",
-            consolidated ? 1 : 0);
+        command.Parameters.AddWithValue("$consolidated", consolidated ? 1 : 0);
         command.Parameters.AddWithValue("$fromUtc", fromUtc.ToString("O"));
         command.Parameters.AddWithValue("$toUtc", toUtc.ToString("O"));
     }

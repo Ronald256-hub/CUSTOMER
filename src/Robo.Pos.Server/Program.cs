@@ -57,6 +57,7 @@ builder.Services.AddSingleton<ShortGlassMonitoringService>();
 builder.Services.AddSingleton<SaleVoidService>();
 builder.Services.AddSingleton<ShopSaleVoidService>();
 builder.Services.AddSingleton<SalesReturnService>();
+builder.Services.AddSingleton<CreditSalesReturnService>();
 builder.Services.AddSingleton<BusinessOperationsService>();
 builder.Services.AddSingleton<SystemAdministrationService>();
 
@@ -108,7 +109,7 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
 {
     application = "Nexus POS",
     service = "Production Server",
-    version = "6.7.0",
+    version = "6.8.0",
     status = "running",
     capabilities = new[]
     {
@@ -127,6 +128,12 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
         "printable-credit-notes",
         "return-aware-shift-reconciliation",
         "return-aware-sales-reporting",
+        "credit-sale-return-receivable-adjustments",
+        "overpaid-invoice-customer-credits",
+        "customer-credit-liability-ledger",
+        "customer-credit-applications",
+        "non-cash-credit-note-settlements",
+        "immutable-credit-return-register",
         "shop-scoped-teller-shifts",
         "shop-scoped-receipt-numbering",
         "audited-receipt-reprints",
@@ -230,7 +237,7 @@ app.MapGet(
         {
             ok = true,
             application = "Nexus POS",
-            version = "6.7.0",
+            version = "6.8.0",
             instanceId,
             schemaVersion = status.SchemaVersion,
             database = status
@@ -325,6 +332,7 @@ app.MapHrmEndpoints();
 app.MapSaasEndpoints();
 app.MapSalesEndpoints();
 app.MapSalesReturnEndpoints();
+app.MapCreditSalesReturnEndpoints();
 app.MapShortGlassMonitoringEndpoints();
 app.MapAdminReferenceEndpoints();
 app.MapBusinessOperationsEndpoints();

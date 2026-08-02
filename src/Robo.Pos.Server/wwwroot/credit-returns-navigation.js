@@ -45,7 +45,7 @@
     if (!host || !dialog?.open || host.querySelector(`[data-command-page="${routeId}"]`)) return;
 
     const query = String(document.querySelector("#commandSearch")?.value || "").trim().toLowerCase();
-    const searchable = `${routeTitle} credit sale returns receivable customer credits application invoice credit note`;
+    const searchable = `${routeTitle} credit sale returns receivable customer credits application invoice credit note`.toLowerCase();
     if (query && !searchable.includes(query)) return;
 
     const button = document.createElement("button");

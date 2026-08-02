@@ -129,10 +129,28 @@ try {
   );
   if (returnsDesktopOverflow) throw new Error("The sales returns desktop workspace has horizontal overflow.");
 
+  await openModule("credit control", "credit-returns");
+  await page.getByRole("heading", { name: "Credit returns and customer credits", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Eligible credit invoices", exact: true }).waitFor();
+  await page.getByRole("tab", { name: /Credit returns/ }).waitFor();
+  await page.getByRole("tab", { name: /Customer credits/ }).click();
+  await page.getByRole("heading", { name: "Customer credit balances", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Apply customer credit", exact: true }).waitFor();
+  await page.getByRole("tab", { name: /Applications/ }).click();
+  await page.getByRole("heading", { name: "Customer-credit applications", exact: true }).waitFor();
+  await page.getByRole("tab", { name: /Credit returns/ }).click();
+  await page.getByText("Accounting mode", { exact: true }).waitFor();
+  await page.getByText("Non-cash", { exact: true }).waitFor();
+
+  const creditReturnsDesktopOverflow = await page.evaluate(() =>
+    document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
+  );
+  if (creditReturnsDesktopOverflow) throw new Error("The credit returns desktop workspace has horizontal overflow.");
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload({ waitUntil: "networkidle" });
-  await page.getByRole("heading", { name: "Sales returns and refunds", exact: true }).waitFor();
-  await page.getByRole("heading", { name: "Eligible receipts", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Credit returns and customer credits", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Eligible credit invoices", exact: true }).waitFor();
   await page.getByRole("button", { name: "Open navigation" }).waitFor();
   await page.getByRole("button", { name: "Open navigation" }).click();
 
@@ -145,7 +163,7 @@ try {
   const mobileOverflow = await page.evaluate(() =>
     document.documentElement.scrollWidth > document.documentElement.clientWidth + 2
   );
-  if (mobileOverflow) throw new Error("The mobile application shell has horizontal overflow.");
+  if (mobileOverflow) throw new Error("The mobile credit returns workspace has horizontal overflow.");
 
   const unlabeledInteractive = await page.evaluate(() => {
     const elements = [...document.querySelectorAll("button, input, select, textarea, a[href]")];
@@ -183,7 +201,7 @@ try {
     throw new Error(`Browser console errors: ${relevantConsoleErrors.join(" | ")}`);
   }
 
-  console.log("Nexus operator, stock, CRM, finance, HRM, intelligence, approvals and sales returns browser validation passed.");
+  console.log("Nexus operator, stock, CRM, finance, HRM, intelligence, approvals, sales returns and credit control browser validation passed.");
 } finally {
   await browser.close();
 }

@@ -142,6 +142,10 @@ public sealed class DatabaseBootstrap
         await SalesReturnsMigration.ApplyAsync(
             connection,
             cancellationToken);
+
+        await CreditSalesReturnsMigration.ApplyAsync(
+            connection,
+            cancellationToken);
     }
 
     public async Task<DatabaseStatus> GetStatusAsync(

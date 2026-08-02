@@ -151,19 +151,6 @@ CREATE TRIGGER IF NOT EXISTS trg_shift_close_cash_custody
 AFTER UPDATE OF status ON teller_shifts
 WHEN OLD.status = 'open' AND NEW.status = 'closed'
 BEGIN
-    UPDATE teller_shifts
-    SET expected_cash_minor =
-        expected_cash_minor
-        + COALESCE((SELECT SUM(amount_minor) FROM cash_drawer_movements WHERE shift_id = NEW.id AND movement_type = 'float_in'), 0)
-        - COALESCE((SELECT SUM(amount_minor) FROM cash_drawer_movements WHERE shift_id = NEW.id AND movement_type = 'safe_drop'), 0),
-        cash_variance_minor = counted_cash_minor -
-        (
-            expected_cash_minor
-            + COALESCE((SELECT SUM(amount_minor) FROM cash_drawer_movements WHERE shift_id = NEW.id AND movement_type = 'float_in'), 0)
-            - COALESCE((SELECT SUM(amount_minor) FROM cash_drawer_movements WHERE shift_id = NEW.id AND movement_type = 'safe_drop'), 0)
-        )
-    WHERE id = NEW.id;
-
     INSERT OR IGNORE INTO shift_reconciliation_reviews
     (
         shift_id, organization_id, shop_id, review_status,
@@ -175,13 +162,12 @@ BEGIN
         shop.organization_id,
         NEW.shop_id,
         'pending',
-        updated.expected_cash_minor,
-        updated.counted_cash_minor,
-        updated.cash_variance_minor,
+        NEW.expected_cash_minor,
+        NEW.counted_cash_minor,
+        NEW.cash_variance_minor,
         NEW.closed_at_utc
-    FROM teller_shifts AS updated
-    INNER JOIN shops AS shop ON shop.id = updated.shop_id
-    WHERE updated.id = NEW.id;
+    FROM shops AS shop
+    WHERE shop.id = NEW.shop_id;
 END;
 
 INSERT OR IGNORE INTO schema_versions

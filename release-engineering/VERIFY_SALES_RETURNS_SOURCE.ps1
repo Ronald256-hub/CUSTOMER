@@ -158,8 +158,8 @@ foreach ($token in @(
     }
 }
 
-if (-not ($text.Program.Contains('version = "6.7.0"') -or
-          $text.Program.Contains('version = "6.8.0"'))) {
+$versionMatch = [regex]::Match($text.Program, 'version = "([^"]+)"')
+if (-not $versionMatch.Success -or [version]$versionMatch.Groups[1].Value -lt [version]'6.7.0') {
     throw 'The Nexus service version is older than the sales-return release.'
 }
 
@@ -269,4 +269,4 @@ foreach ($token in @(
     }
 }
 
-Write-Host 'Sales-return schema, service, accounting, reporting, cash audit, UI, routing and transaction assertions passed.'
+Write-Host 'Sales-return schema, service, accounting, reporting, cash audit, UI, routing and forward-compatible transaction assertions passed.'

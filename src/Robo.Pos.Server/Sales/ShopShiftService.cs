@@ -286,7 +286,32 @@ public sealed class ShopShiftService
                 await calculateRefunds.ExecuteScalarAsync(cancellationToken));
         }
 
-        long expectedCash = checked(openingCash + cashSales - cashRefunds);
+        long floatIn;
+        long safeDrop;
+        await using (var calculateCustody = connection.CreateCommand())
+        {
+            calculateCustody.Transaction = transaction;
+            calculateCustody.CommandText =
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN movement_type = 'float_in' THEN amount_minor ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN movement_type = 'safe_drop' THEN amount_minor ELSE 0 END), 0)
+            FROM cash_drawer_movements
+            WHERE shift_id = $shiftId
+              AND shop_id = $shopId
+              AND status = 'completed';
+            """;
+            calculateCustody.Parameters.AddWithValue("$shiftId", shiftId);
+            calculateCustody.Parameters.AddWithValue("$shopId", context.ShopId);
+            await using var reader =
+                await calculateCustody.ExecuteReaderAsync(cancellationToken);
+            await reader.ReadAsync(cancellationToken);
+            floatIn = reader.GetInt64(0);
+            safeDrop = reader.GetInt64(1);
+        }
+
+        long expectedCash = checked(
+            openingCash + cashSales - cashRefunds + floatIn - safeDrop);
         long variance = checked(request.CountedCashMinor - expectedCash);
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
@@ -341,6 +366,8 @@ public sealed class ShopShiftService
                 openingCash,
                 cashSales,
                 cashRefunds,
+                floatIn,
+                safeDrop,
                 expectedCash,
                 countedCash = request.CountedCashMinor,
                 variance

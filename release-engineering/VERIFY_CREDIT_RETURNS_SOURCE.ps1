@@ -133,8 +133,11 @@ foreach ($token in @(
     }
 }
 
+$versionMatch = [regex]::Match($text.Program, 'version = "([^"]+)"')
+if (-not $versionMatch.Success -or [version]$versionMatch.Groups[1].Value -lt [version]'6.8.0') {
+    throw 'Nexus service version is older than the 6.8 credit-control baseline.'
+}
 foreach ($token in @(
-    'version = "6.8.0"',
     'credit-sale-return-receivable-adjustments',
     'overpaid-invoice-customer-credits',
     'customer-credit-liability-ledger',
@@ -145,7 +148,7 @@ foreach ($token in @(
     'MapCreditSalesReturnEndpoints'
 )) {
     if (-not $text.Program.Contains($token)) {
-        throw "Nexus POS 6.8 registration missing token: $token"
+        throw "Credit-control registration missing token: $token"
     }
 }
 
@@ -212,7 +215,7 @@ foreach ($token in @(
 }
 
 foreach ($token in @(
-    'schemaVersion -ne 18',
+    'schemaVersion -lt 18',
     'receivableReductionMinor',
     'customerCreditMinor',
     'credit_return_quantity_exceeds_remaining',
@@ -228,7 +231,7 @@ foreach ($token in @(
 }
 
 if (-not $text.SalesReturnGate.Contains('schemaVersion -lt 17')) {
-    throw 'The established sales-return regression is not forward compatible with schema 18.'
+    throw 'The established sales-return regression is not forward compatible with schema 18 and later.'
 }
 
-Write-Host 'Credit-sale returns, receivable adjustments, customer credits, applications, UI and compatibility assertions passed.'
+Write-Host 'Credit-sale returns, receivable adjustments, customer credits, applications, UI and forward-compatibility assertions passed.'

@@ -157,12 +157,14 @@ try {
             if ($health.ok -and $health.instanceId -eq $instanceId) { break }
         } catch { }
     }
-    if (-not $health -or $health.schemaVersion -ne 18) {
-        throw "Nexus did not start with exact credit-control schema version 18."
+    if (-not $health -or $health.schemaVersion -lt 18) {
+        throw "Nexus did not start with the minimum credit-control schema version 18."
     }
 
     $service = Invoke-Json GET "$baseUri/api/v3/service"
-    if ($service.version -ne "6.8.0") { throw "The service version is not 6.8.0." }
+    if ([version]$service.version -lt [version]"6.8.0") {
+        throw "The service version is older than the Nexus POS 6.8 credit-control baseline."
+    }
     foreach ($capability in @(
         "credit-sale-return-receivable-adjustments",
         "overpaid-invoice-customer-credits",

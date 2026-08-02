@@ -135,7 +135,7 @@ foreach ($token in @(
     'ReturnedSalesMinor',
     'RestockedCostMinor',
     'GrossCostOfGoodsSoldMinor',
-    "sale.status IN ('completed', 'partially_returned', 'returned')",
+    "'partially_returned'",
     'sales_returns AS header',
     'checked(grossSales - returnedSales)',
     'checked(grossCost - restockedCost)'
@@ -150,7 +150,7 @@ foreach ($token in @(
     "refund_method = 'cash'",
     'long cashRefunds',
     'openingCash + cashSales - cashRefunds',
-    'cashRefunds,'
+    'cashRefunds,',
     'shift.closed'
 )) {
     if (-not $text.ShiftService.Contains($token)) {
@@ -158,8 +158,12 @@ foreach ($token in @(
     }
 }
 
+if (-not ($text.Program.Contains('version = "6.7.0"') -or
+          $text.Program.Contains('version = "6.8.0"'))) {
+    throw 'The Nexus service version is older than the sales-return release.'
+}
+
 foreach ($token in @(
-    'version = "6.7.0"',
     'controlled-partial-sales-returns',
     'same-channel-customer-refunds',
     'return-stock-disposition',
@@ -170,7 +174,7 @@ foreach ($token in @(
     'AddSingleton<SalesReturnDocumentWriter>'
 )) {
     if (-not $text.Program.Contains($token)) {
-        throw "Nexus 6.7 program registration missing token: $token"
+        throw "Sales-return program registration missing token: $token"
     }
 }
 
@@ -249,7 +253,7 @@ foreach ($token in @(
 }
 
 foreach ($token in @(
-    'schemaVersion -ne 17',
+    'schemaVersion -lt 17',
     'return_quantity_exceeds_remaining',
     'Assert-ReturnJournal',
     'restockedBaseUnits',

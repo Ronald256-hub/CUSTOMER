@@ -79,73 +79,24 @@ public sealed class DatabaseBootstrap
 
         await command.ExecuteNonQueryAsync(cancellationToken);
 
-        await AuthenticationMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await BusinessMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await MultiShopMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await ActiveShopContextMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await ShopScopedInventoryMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await ShopScopedSalesMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await StockTransferWorkflowMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await StockTransferInvariantMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await AccountingKernelMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await OperationalAccountingMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await FinanceSettlementMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await AdvancedProcurementMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await CrmCustomerManagementMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await HrmWorkforceMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await SaasTenantOperationsMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await SalesReturnsMigration.ApplyAsync(
-            connection,
-            cancellationToken);
-
-        await CreditSalesReturnsMigration.ApplyAsync(
-            connection,
-            cancellationToken);
+        await AuthenticationMigration.ApplyAsync(connection, cancellationToken);
+        await BusinessMigration.ApplyAsync(connection, cancellationToken);
+        await MultiShopMigration.ApplyAsync(connection, cancellationToken);
+        await ActiveShopContextMigration.ApplyAsync(connection, cancellationToken);
+        await ShopScopedInventoryMigration.ApplyAsync(connection, cancellationToken);
+        await ShopScopedSalesMigration.ApplyAsync(connection, cancellationToken);
+        await StockTransferWorkflowMigration.ApplyAsync(connection, cancellationToken);
+        await StockTransferInvariantMigration.ApplyAsync(connection, cancellationToken);
+        await AccountingKernelMigration.ApplyAsync(connection, cancellationToken);
+        await OperationalAccountingMigration.ApplyAsync(connection, cancellationToken);
+        await FinanceSettlementMigration.ApplyAsync(connection, cancellationToken);
+        await AdvancedProcurementMigration.ApplyAsync(connection, cancellationToken);
+        await CrmCustomerManagementMigration.ApplyAsync(connection, cancellationToken);
+        await HrmWorkforceMigration.ApplyAsync(connection, cancellationToken);
+        await SaasTenantOperationsMigration.ApplyAsync(connection, cancellationToken);
+        await SalesReturnsMigration.ApplyAsync(connection, cancellationToken);
+        await CreditSalesReturnsMigration.ApplyAsync(connection, cancellationToken);
+        await CashDrawerReconciliationMigration.ApplyAsync(connection, cancellationToken);
     }
 
     public async Task<DatabaseStatus> GetStatusAsync(

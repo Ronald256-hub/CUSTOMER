@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate-cash-drawer:
@@ -21,31 +21,6 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: agent/split-partial-payments
-          fetch-depth: 0
-
-      - name: Apply staged Nexus POS 7.0 patch
-        if: hashFiles('release-engineering/PATCH_SPLIT_PAYMENT_CORE.py') != ''
-        shell: pwsh
-        run: |
-          python 'release-engineering/PATCH_SPLIT_PAYMENT_CORE.py'
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python 'release-engineering/PATCH_SPLIT_PAYMENT_INTEGRATION.py'
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          Remove-Item 'release-engineering/PATCH_SPLIT_PAYMENT_CORE.py' -Force
-          Remove-Item 'release-engineering/PATCH_SPLIT_PAYMENT_INTEGRATION.py' -Force
-          Remove-Item '.github/workflows/apply-split-payment-patch.yml' -Force -ErrorAction SilentlyContinue
-          Remove-Item 'split-payment-patch.log' -Force -ErrorAction SilentlyContinue
-          git checkout origin/main -- '.github/workflows/cash-drawer-gate.yml'
-
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git commit -m 'Add split and partial payments'
-          git push origin HEAD:agent/split-partial-payments
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4

@@ -15,6 +15,11 @@ public sealed record AuditDocumentLine(
     long UnitPriceMinor,
     long LineTotalMinor);
 
+public sealed record AuditDocumentPayment(
+    string PaymentMethod,
+    long AmountMinor,
+    string Reference);
+
 public sealed record AuditDocumentSnapshot(
     string BusinessName,
     string BusinessAddress,
@@ -38,7 +43,8 @@ public sealed record AuditDocumentSnapshot(
     long ChangeMinor,
     string Notes,
     DateTimeOffset CompletedAtUtc,
-    IReadOnlyList<AuditDocumentLine> Items);
+    IReadOnlyList<AuditDocumentLine> Items,
+    IReadOnlyList<AuditDocumentPayment>? Payments = null);
 
 public sealed record WrittenAuditFile(
     string DocumentType,
@@ -614,6 +620,26 @@ public sealed class AuditDocumentWriter
                     snapshot.PaymentMethod)));
         html.Append("</strong></p>");
 
+        if (snapshot.Payments is { Count: > 0 })
+        {
+            html.Append("<div class=\"customer\"><strong>Payment breakdown</strong>");
+            foreach (AuditDocumentPayment payment in snapshot.Payments)
+            {
+                html.Append("<p>");
+                html.Append(Encode(DisplayPaymentMethod(payment.PaymentMethod)));
+                html.Append(": <strong>");
+                html.Append(Encode(Money(payment.AmountMinor, snapshot.CurrencyCode)));
+                html.Append("</strong>");
+                if (!string.IsNullOrWhiteSpace(payment.Reference))
+                {
+                    html.Append(" · Ref: ");
+                    html.Append(Encode(payment.Reference));
+                }
+                html.Append("</p>");
+            }
+            html.Append("</div>");
+        }
+
         if (!string.IsNullOrWhiteSpace(
                 snapshot.Notes))
         {
@@ -743,6 +769,20 @@ public sealed class AuditDocumentWriter
 
         lines.Add(
             $"Payment: {DisplayPaymentMethod(snapshot.PaymentMethod)}");
+
+        if (snapshot.Payments is { Count: > 0 })
+        {
+            lines.Add("Payment breakdown:");
+            foreach (AuditDocumentPayment payment in snapshot.Payments)
+            {
+                string reference = string.IsNullOrWhiteSpace(payment.Reference)
+                    ? string.Empty
+                    : $" | Ref: {payment.Reference}";
+                lines.Add(
+                    $"  {DisplayPaymentMethod(payment.PaymentMethod)}: " +
+                    $"{Money(payment.AmountMinor, snapshot.CurrencyCode)}{reference}");
+            }
+        }
 
         if (!string.IsNullOrWhiteSpace(
                 snapshot.Notes))

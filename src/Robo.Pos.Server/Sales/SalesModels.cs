@@ -26,6 +26,16 @@ public sealed record SaleLineRequest(
     string ProductId,
     long Quantity);
 
+public sealed record SalePaymentRequest(
+    string PaymentMethod,
+    long AmountMinor,
+    string? Reference = null);
+
+public sealed record CompletedSalePayment(
+    string PaymentMethod,
+    long AmountMinor,
+    string Reference);
+
 public sealed record CompleteSaleRequest(
     IReadOnlyList<SaleLineRequest>? Items = null,
     string PaymentMethod = "cash",
@@ -36,7 +46,8 @@ public sealed record CompleteSaleRequest(
     string? CustomerAddress = null,
     string? CustomerTaxNumber = null,
     string? Notes = null,
-    string? CustomerId = null);
+    string? CustomerId = null,
+    IReadOnlyList<SalePaymentRequest>? Payments = null);
 
 public sealed record CompletedSaleLine(
     string ProductId,
@@ -72,7 +83,8 @@ public sealed record CompleteSaleResult(
     IReadOnlyList<GeneratedSaleDocument> Documents,
     string? ShopId = null,
     string? ShopCode = null,
-    string? ShopName = null);
+    string? ShopName = null,
+    IReadOnlyList<CompletedSalePayment>? Payments = null);
 
 public sealed record ReceiptListItem(
     string SaleId,
@@ -110,7 +122,8 @@ public sealed record ReceiptDetails(
     IReadOnlyList<GeneratedSaleDocument> Documents,
     string? ShopId = null,
     string? ShopCode = null,
-    string? ShopName = null);
+    string? ShopName = null,
+    IReadOnlyList<CompletedSalePayment>? Payments = null);
 
 public sealed record StoredDocumentFile(
     string FullPath,

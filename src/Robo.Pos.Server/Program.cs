@@ -82,7 +82,7 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
 {
     application = "Nexus POS",
     service = "Production Server",
-    version = "6.9.0",
+    version = "7.0.0",
     status = "running",
     capabilities = new[]
     {
@@ -112,6 +112,10 @@ app.MapGet("/api/v3/service", () => Results.Ok(new
         "denomination-cash-counts",
         "manager-shift-reconciliation",
         "immutable-cash-drawer-register",
+        "split-and-partial-payments",
+        "cash-change-netting",
+        "payment-reference-audit",
+        "multi-tender-receipt-breakdown",
         "shop-scoped-teller-shifts",
         "shop-scoped-receipt-numbering",
         "audited-receipt-reprints",
@@ -206,7 +210,7 @@ app.MapGet("/api/v3/health", async (DatabaseBootstrap db, CancellationToken canc
     {
         ok = true,
         application = "Nexus POS",
-        version = "6.9.0",
+        version = "7.0.0",
         instanceId,
         schemaVersion = status.SchemaVersion,
         database = status

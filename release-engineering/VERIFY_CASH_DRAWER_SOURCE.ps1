@@ -145,7 +145,7 @@ foreach ($token in @(
 }
 
 foreach ($token in @(
-    'version = "6.9.0"',
+    'version = "7.0.0"',
     'cash-drawer-custody-controls',
     'audited-float-and-safe-drops',
     'denomination-cash-counts',
@@ -163,7 +163,7 @@ foreach ($token in @(
     'optional-hard-shop-and-user-limits'
 )) {
     if (-not $text.Program.Contains($token)) {
-        throw "Nexus 6.9 registration or preserved platform capability missing: $token"
+        throw "Nexus 7.0 registration or preserved platform capability missing: $token"
     }
 }
 

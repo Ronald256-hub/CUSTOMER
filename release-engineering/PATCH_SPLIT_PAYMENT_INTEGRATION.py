@@ -138,9 +138,8 @@ write(path, text)
 
 path = "src/Robo.Pos.Server/Sales/SalesReturnService.cs"
 text = read(path)
-text = replace_once(
-    text,
-    "        INNER JOIN sale_payments AS payment\n            ON payment.sale_id = sale.id",
+legacy_payment_join = "        INNER JOIN sale_payments AS payment\n            ON payment.sale_id = sale.id"
+single_tender_join = (
     "        INNER JOIN\n"
     "        (\n"
     "            SELECT\n"
@@ -150,9 +149,12 @@ text = replace_once(
     "            GROUP BY sale_id\n"
     "            HAVING COUNT(*) = 1\n"
     "        ) AS payment\n"
-    "            ON payment.sale_id = sale.id",
-    "exclude split sales from legacy return list",
+    "            ON payment.sale_id = sale.id"
 )
+if text.count(legacy_payment_join) != 2:
+    raise RuntimeError(
+        f"return payment joins: expected 2 matches, found {text.count(legacy_payment_join)}")
+text = text.replace(legacy_payment_join, single_tender_join)
 text = replace_once(
     text,
     "        await using var transaction =\n            (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);\n\n        SaleHeader sale = await ReadSaleHeaderAsync(",

@@ -244,7 +244,7 @@ public sealed class ShopReceiptService
             header.TotalMinor,
             header.AmountReceivedMinor,
             header.ChangeMinor,
-            header.PaymentMethod,
+            payments.Count > 1 ? "split" : header.PaymentMethod,
             header.Notes,
             header.CompletedAtUtc,
             items,

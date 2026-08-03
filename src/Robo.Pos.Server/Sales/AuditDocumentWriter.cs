@@ -622,7 +622,7 @@ public sealed class AuditDocumentWriter
 
         if (snapshot.Payments is { Count: > 0 })
         {
-            html.Append("<div class="customer"><strong>Payment breakdown</strong>");
+            html.Append("<div class=\"customer\"><strong>Payment breakdown</strong>");
             foreach (AuditDocumentPayment payment in snapshot.Payments)
             {
                 html.Append("<p>");

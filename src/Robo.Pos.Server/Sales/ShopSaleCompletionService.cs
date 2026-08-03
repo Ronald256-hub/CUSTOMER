@@ -39,18 +39,6 @@ public sealed class ShopSaleCompletionService
         IReadOnlyList<SaleLineRequest> requestedLines =
             NormalizeLines(request.Items);
 
-        string paymentMethod =
-            request.PaymentMethod?.Trim().ToLowerInvariant()
-            ?? string.Empty;
-
-        if (!PaymentMethods.Contains(paymentMethod))
-        {
-            throw Validation(
-                "invalid_payment_method",
-                "Use cash, mobile money, card, bank or credit.");
-        }
-
-        ValidateCustomer(request, paymentMethod);
 
         await using var connection =
             new SqliteConnection(_database.ConnectionString);
@@ -96,25 +84,9 @@ public sealed class ShopSaleCompletionService
         }
 
         long total = subtotal;
-        if (paymentMethod == "cash")
-        {
-            if (request.AmountReceivedMinor < total)
-            {
-                throw Validation(
-                    "insufficient_payment",
-                    "The amount received is less than the sale total.");
-            }
-        }
-        else if (request.AmountReceivedMinor != total)
-        {
-            throw Validation(
-                "payment_amount_mismatch",
-                "Non-cash payments must equal the exact sale total.");
-        }
-
-        long change = paymentMethod == "cash"
-            ? request.AmountReceivedMinor - total
-            : 0;
+        PaymentPlan paymentPlan = NormalizePayments(request, total);
+        ValidateCustomer(request, paymentPlan.HasCredit);
+        long change = paymentPlan.ChangeMinor;
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
         string saleId = Guid.NewGuid().ToString("N");
@@ -148,6 +120,7 @@ public sealed class ShopSaleCompletionService
             request,
             subtotal,
             total,
+            paymentPlan.AmountTenderedMinor,
             change,
             now,
             cancellationToken);
@@ -172,14 +145,18 @@ public sealed class ShopSaleCompletionService
                 cancellationToken);
         }
 
-        await InsertPaymentAsync(
-            connection,
-            transaction,
-            saleId,
-            paymentMethod,
-            total,
-            now,
-            cancellationToken);
+        foreach (NormalizedPayment payment in paymentPlan.AppliedPayments)
+        {
+            await InsertPaymentAsync(
+                connection,
+                transaction,
+                saleId,
+                payment.PaymentMethod,
+                payment.AmountMinor,
+                payment.Reference,
+                now,
+                cancellationToken);
+        }
 
         await WriteAuditAsync(
             connection,
@@ -196,7 +173,15 @@ public sealed class ShopSaleCompletionService
                 shiftId,
                 receiptNumber,
                 invoiceNumber,
-                paymentMethod,
+                paymentMethod = paymentPlan.Summary,
+                amountTenderedMinor = paymentPlan.AmountTenderedMinor,
+                changeMinor = paymentPlan.ChangeMinor,
+                payments = paymentPlan.AppliedPayments.Select(payment => new
+                {
+                    payment.PaymentMethod,
+                    payment.AmountMinor,
+                    payment.Reference
+                }),
                 totalMinor = total,
                 itemCount = lines.Count
             },
@@ -231,11 +216,11 @@ public sealed class ShopSaleCompletionService
             request.CustomerPhone?.Trim() ?? string.Empty,
             request.CustomerAddress?.Trim() ?? string.Empty,
             request.CustomerTaxNumber?.Trim() ?? string.Empty,
-            paymentMethod,
+            paymentPlan.Summary,
             subtotal,
             0,
             total,
-            request.AmountReceivedMinor,
+            paymentPlan.AmountTenderedMinor,
             change,
             request.Notes?.Trim() ?? string.Empty,
             now,
@@ -247,6 +232,11 @@ public sealed class ShopSaleCompletionService
                     line.UnitSizeMl,
                     line.UnitPriceMinor,
                     line.LineTotalMinor))
+                .ToList(),
+            paymentPlan.AppliedPayments.Select(payment => new AuditDocumentPayment(
+                    payment.PaymentMethod,
+                    payment.AmountMinor,
+                    payment.Reference))
                 .ToList());
 
         var writtenFiles = new List<WrittenAuditFile>();
@@ -278,15 +268,141 @@ public sealed class ShopSaleCompletionService
             user.DisplayName,
             subtotal,
             total,
-            request.AmountReceivedMinor,
+            paymentPlan.AmountTenderedMinor,
             change,
-            paymentMethod,
+            paymentPlan.Summary,
             now,
             completedLines,
             registeredDocuments,
             context.ShopId,
             context.ShopCode,
-            context.ShopName);
+            context.ShopName,
+            paymentPlan.AppliedPayments.Select(payment => new CompletedSalePayment(
+                    payment.PaymentMethod,
+                    payment.AmountMinor,
+                    payment.Reference))
+                .ToList());
+    }
+
+
+    private static PaymentPlan NormalizePayments(
+        CompleteSaleRequest request,
+        long totalMinor)
+    {
+        IReadOnlyList<SalePaymentRequest> requested =
+            request.Payments is { Count: > 0 }
+                ? request.Payments
+                : new[]
+                {
+                    new SalePaymentRequest(
+                        request.PaymentMethod,
+                        request.AmountReceivedMinor)
+                };
+
+        if (requested.Count > 5)
+        {
+            throw Validation(
+                "too_many_payment_methods",
+                "A sale cannot use more than five payment methods.");
+        }
+
+        var normalized = new List<NormalizedPayment>(requested.Count);
+        var methods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (SalePaymentRequest payment in requested)
+        {
+            string method = payment.PaymentMethod?.Trim().ToLowerInvariant()
+                ?? string.Empty;
+            if (!PaymentMethods.Contains(method))
+            {
+                throw Validation(
+                    "invalid_payment_method",
+                    "Use cash, mobile money, card, bank or credit.");
+            }
+            if (!methods.Add(method))
+            {
+                throw Validation(
+                    "duplicate_payment_method",
+                    "Use each payment method only once in a split payment.");
+            }
+            if (payment.AmountMinor <= 0)
+            {
+                throw Validation(
+                    "invalid_payment_amount",
+                    "Every payment amount must be greater than zero.");
+            }
+
+            string reference = payment.Reference?.Trim() ?? string.Empty;
+            if (reference.Length > 120)
+            {
+                throw Validation(
+                    "payment_reference_too_long",
+                    "A payment reference cannot exceed 120 characters.");
+            }
+
+            normalized.Add(new NormalizedPayment(method, payment.AmountMinor, reference));
+        }
+
+        bool hasCredit = normalized.Any(payment => payment.PaymentMethod == "credit");
+        if (hasCredit && normalized.Count > 1)
+        {
+            throw Validation(
+                "mixed_credit_payment_not_supported",
+                "Credit cannot be combined with another tender in this release. Complete a full credit sale or use non-credit split payments.");
+        }
+
+        long tendered = normalized.Aggregate(
+            0L,
+            (sum, payment) => checked(sum + payment.AmountMinor));
+        if (tendered < totalMinor)
+        {
+            throw Validation(
+                "insufficient_payment",
+                "The combined payment amount is less than the sale total.");
+        }
+
+        long change = checked(tendered - totalMinor);
+        if (change > 0)
+        {
+            int cashIndex = normalized.FindIndex(payment => payment.PaymentMethod == "cash");
+            if (cashIndex < 0)
+            {
+                throw Validation(
+                    "non_cash_overpayment",
+                    "Only cash can exceed the remaining sale balance because change must be returned from the drawer.");
+            }
+
+            NormalizedPayment cash = normalized[cashIndex];
+            long appliedCash = checked(cash.AmountMinor - change);
+            if (appliedCash <= 0)
+            {
+                throw Validation(
+                    "cash_change_exceeds_cash_tender",
+                    "Cash change cannot exceed the cash amount tendered.");
+            }
+            normalized[cashIndex] = cash with { AmountMinor = appliedCash };
+        }
+
+        long applied = normalized.Aggregate(
+            0L,
+            (sum, payment) => checked(sum + payment.AmountMinor));
+        if (applied != totalMinor)
+        {
+            throw new SalesException(
+                StatusCodes.Status500InternalServerError,
+                "payment_plan_not_balanced",
+                "The payment plan did not reconcile to the sale total.");
+        }
+
+        string summary = normalized.Count == 1
+            ? normalized[0].PaymentMethod
+            : "split";
+
+        return new PaymentPlan(
+            normalized,
+            tendered,
+            change,
+            summary,
+            hasCredit);
     }
 
     private static IReadOnlyList<SaleLineRequest> NormalizeLines(
@@ -327,7 +443,7 @@ public sealed class ShopSaleCompletionService
 
     private static void ValidateCustomer(
         CompleteSaleRequest request,
-        string paymentMethod)
+        bool hasCredit)
     {
         ValidateLength(
             request.CustomerName,
@@ -360,7 +476,7 @@ public sealed class ShopSaleCompletionService
             "customer_id_too_long",
             "Customer identifier cannot exceed 100 characters.");
 
-        if (paymentMethod == "credit" &&
+        if (hasCredit &&
             string.IsNullOrWhiteSpace(request.CustomerId))
         {
             throw Validation(
@@ -771,6 +887,7 @@ public sealed class ShopSaleCompletionService
         CompleteSaleRequest request,
         long subtotal,
         long total,
+        long amountReceived,
         long change,
         DateTimeOffset now,
         CancellationToken cancellationToken)
@@ -855,7 +972,7 @@ public sealed class ShopSaleCompletionService
         command.Parameters.AddWithValue("$total", total);
         command.Parameters.AddWithValue(
             "$amountReceived",
-            request.AmountReceivedMinor);
+            amountReceived);
         command.Parameters.AddWithValue("$change", change);
         command.Parameters.AddWithValue(
             "$notes",
@@ -990,7 +1107,8 @@ public sealed class ShopSaleCompletionService
         SqliteTransaction transaction,
         string saleId,
         string paymentMethod,
-        long total,
+        long amountMinor,
+        string reference,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -1011,13 +1129,14 @@ public sealed class ShopSaleCompletionService
             $saleId,
             $paymentMethod,
             $amount,
-            '',
+            $reference,
             $receivedAtUtc
         );
         """;
         payment.Parameters.AddWithValue("$saleId", saleId);
         payment.Parameters.AddWithValue("$paymentMethod", paymentMethod);
-        payment.Parameters.AddWithValue("$amount", total);
+        payment.Parameters.AddWithValue("$amount", amountMinor);
+        payment.Parameters.AddWithValue("$reference", reference);
         payment.Parameters.AddWithValue("$receivedAtUtc", now.ToString("O"));
         await payment.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -1175,6 +1294,18 @@ public sealed class ShopSaleCompletionService
         string code,
         string message) =>
         new(StatusCodes.Status404NotFound, code, message);
+
+    private sealed record NormalizedPayment(
+        string PaymentMethod,
+        long AmountMinor,
+        string Reference);
+
+    private sealed record PaymentPlan(
+        IReadOnlyList<NormalizedPayment> AppliedPayments,
+        long AmountTenderedMinor,
+        long ChangeMinor,
+        string Summary,
+        bool HasCredit);
 
     private sealed record BusinessSnapshot(
         string BusinessName,

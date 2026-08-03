@@ -382,6 +382,7 @@ public static class SalesEndpoints
                         receipt.CompletedAtUtc,
                         receipt.Items,
                         receipt.Documents,
+                        receipt.Payments,
                         receipt.ShopId,
                         receipt.ShopCode,
                         receipt.ShopName,

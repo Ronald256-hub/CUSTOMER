@@ -51,15 +51,23 @@ public sealed class ShopReceiptService
             user.display_name,
             sale.status,
             sale.total_minor,
-            COALESCE(
+            CASE
+                WHEN
                 (
-                    SELECT payment.payment_method
+                    SELECT COUNT(*)
                     FROM sale_payments AS payment
                     WHERE payment.sale_id = sale.id
-                    ORDER BY payment.id
-                    LIMIT 1
-                ),
-                ''),
+                ) > 1 THEN 'split'
+                ELSE COALESCE(
+                    (
+                        SELECT payment.payment_method
+                        FROM sale_payments AS payment
+                        WHERE payment.sale_id = sale.id
+                        ORDER BY payment.id
+                        LIMIT 1
+                    ),
+                    '')
+            END,
             COALESCE(sale.completed_at_utc, sale.created_at_utc),
             (
                 SELECT COUNT(*)
@@ -215,6 +223,12 @@ public sealed class ShopReceiptService
                 normalizedSaleId,
                 cancellationToken);
 
+        IReadOnlyList<CompletedSalePayment> payments =
+            await ReadPaymentsAsync(
+                connection,
+                normalizedSaleId,
+                cancellationToken);
+
         return new ReceiptDetails(
             header.SaleId,
             header.ReceiptNumber,
@@ -237,7 +251,8 @@ public sealed class ShopReceiptService
             documents,
             header.ShopId,
             header.ShopCode,
-            header.ShopName);
+            header.ShopName,
+            payments);
     }
 
     public async Task<StoredDocumentFile> ResolveDocumentAsync(
@@ -601,6 +616,36 @@ public sealed class ShopReceiptService
         }
 
         return items;
+    }
+
+
+    private static async Task<IReadOnlyList<CompletedSalePayment>> ReadPaymentsAsync(
+        SqliteConnection connection,
+        string saleId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+        """
+        SELECT payment_method, amount_minor, reference
+        FROM sale_payments
+        WHERE sale_id = $saleId
+        ORDER BY id;
+        """;
+        command.Parameters.AddWithValue("$saleId", saleId);
+
+        var payments = new List<CompletedSalePayment>();
+        await using var reader =
+            await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            payments.Add(new CompletedSalePayment(
+                reader.GetString(0),
+                reader.GetInt64(1),
+                reader.GetString(2)));
+        }
+
+        return payments;
     }
 
     private static async Task<IReadOnlyList<GeneratedSaleDocument>>

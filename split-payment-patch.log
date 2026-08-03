@@ -1,8 +1,0 @@
-Patched split-payment core.
-Traceback (most recent call last):
-  File "/home/runner/work/CUSTOMER/CUSTOMER/release-engineering/PATCH_SPLIT_PAYMENT_INTEGRATION.py", line 141, in <module>
-    text = replace_once(
-           ^^^^^^^^^^^^^
-  File "/home/runner/work/CUSTOMER/CUSTOMER/release-engineering/PATCH_SPLIT_PAYMENT_INTEGRATION.py", line 20, in replace_once
-    raise RuntimeError(f"{label}: expected exactly one match, found {count}")
-RuntimeError: exclude split sales from legacy return list: expected exactly one match, found 2

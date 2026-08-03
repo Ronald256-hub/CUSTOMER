@@ -68,7 +68,15 @@ public sealed class SalesReturnService
         FROM sales AS sale
         INNER JOIN shops AS shop
             ON shop.id = sale.shop_id
-        INNER JOIN sale_payments AS payment
+        INNER JOIN
+        (
+            SELECT
+                sale_id,
+                MIN(payment_method) AS payment_method
+            FROM sale_payments
+            GROUP BY sale_id
+            HAVING COUNT(*) = 1
+        ) AS payment
             ON payment.sale_id = sale.id
         LEFT JOIN
         (
@@ -190,6 +198,12 @@ public sealed class SalesReturnService
         await connection.OpenAsync(cancellationToken);
         await using var transaction =
             (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+
+        await EnsureSingleTenderReturnAsync(
+            connection,
+            transaction,
+            normalizedSaleId,
+            cancellationToken);
 
         SaleHeader sale = await ReadSaleHeaderAsync(
             connection,
@@ -725,6 +739,33 @@ public sealed class SalesReturnService
             restock ? baseUnitsReturned : 0, restock ? costValue : 0);
     }
 
+
+    private static async Task EnsureSingleTenderReturnAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string saleId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+        """
+        SELECT COUNT(*)
+        FROM sale_payments
+        WHERE sale_id = $saleId;
+        """;
+        command.Parameters.AddWithValue("$saleId", saleId);
+
+        int paymentCount = Convert.ToInt32(
+            await command.ExecuteScalarAsync(cancellationToken));
+        if (paymentCount > 1)
+        {
+            throw Conflict(
+                "split_sale_return_requires_allocation",
+                "This sale used multiple payment methods. Use the dedicated split-refund allocation workflow when it is enabled.");
+        }
+    }
+
     private static async Task<SaleHeader> ReadSaleHeaderAsync(
         SqliteConnection connection,
         SqliteTransaction? transaction,
@@ -752,7 +793,15 @@ public sealed class SalesReturnService
         FROM sales AS sale
         INNER JOIN shops AS shop
             ON shop.id = sale.shop_id
-        INNER JOIN sale_payments AS payment
+        INNER JOIN
+        (
+            SELECT
+                sale_id,
+                MIN(payment_method) AS payment_method
+            FROM sale_payments
+            GROUP BY sale_id
+            HAVING COUNT(*) = 1
+        ) AS payment
             ON payment.sale_id = sale.id
         LEFT JOIN
         (

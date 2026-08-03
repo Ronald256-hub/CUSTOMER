@@ -15,6 +15,7 @@ $program = Join-Path $root 'src/Robo.Pos.Server/Program.cs'
 $writer = Join-Path $root 'src/Robo.Pos.Server/Sales/AuditDocumentWriter.cs'
 $index = Join-Path $root 'src/Robo.Pos.Server/wwwroot/index.html'
 $javascript = Join-Path $root 'src/Robo.Pos.Server/wwwroot/split-payments.js'
+$cashDrawerTransaction = Join-Path $root 'release-engineering/VERIFY_CASH_DRAWER_RECONCILIATION.ps1'
 
 Assert-Contains $models 'IReadOnlyList<SalePaymentRequest>\? Payments' 'CompleteSaleRequest has no split payment collection.'
 Assert-Contains $service 'NormalizePayments\(request, total\)' 'Sale completion does not normalize split payments.'
@@ -31,6 +32,7 @@ Assert-Contains $program 'version = "7\.0\.0"' 'The service version is not Nexus
 Assert-Contains $program 'split-and-partial-payments' 'Split-payment capability is missing.'
 Assert-Contains $index '/split-payments\.js' 'The split payment checkout is not loaded.'
 Assert-Contains $javascript 'payments,' 'The checkout does not send the payment collection.'
+Assert-Contains $cashDrawerTransaction 'service\.version -ne "7\.0\.0"' 'The preserved cash-drawer transaction gate is not aligned to Nexus 7.0.'
 
 $operationalMigration = Get-Content (Join-Path $root 'src/Robo.Pos.Server/Data/Migrations/011_operational_accounting_integration.sql') -Raw
 if ($operationalMigration -notmatch 'SUM\(amount_minor\).*sale_payments' -and

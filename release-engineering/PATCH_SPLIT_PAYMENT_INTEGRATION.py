@@ -56,8 +56,8 @@ split_payment_sql = """            CASE
                     ),
                     '')
             END,"""
-if text.count(first_payment_sql) != 2:
-    raise RuntimeError(f"receipt payment summary: expected 2 matches, found {text.count(first_payment_sql)}")
+if text.count(first_payment_sql) != 1:
+    raise RuntimeError(f"receipt payment summary: expected 1 match, found {text.count(first_payment_sql)}")
 text = text.replace(first_payment_sql, split_payment_sql)
 text = replace_once(
     text,

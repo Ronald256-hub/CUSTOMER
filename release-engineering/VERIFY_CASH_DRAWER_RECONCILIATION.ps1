@@ -142,7 +142,7 @@ try {
     }
 
     $service = Invoke-Json -Method GET -Uri "$baseUri/api/v3/service"
-    if ($service.version -ne "6.9.0") { throw "The service version is not 6.9.0." }
+    if ($service.version -ne "7.0.0") { throw "The service version is not 7.0.0." }
     foreach ($capability in @(
         "cash-drawer-custody-controls",
         "audited-float-and-safe-drops",

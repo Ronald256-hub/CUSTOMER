@@ -1,0 +1,5 @@
+Patched split-payment core.
+Traceback (most recent call last):
+  File "/home/runner/work/CUSTOMER/CUSTOMER/release-engineering/PATCH_SPLIT_PAYMENT_INTEGRATION.py", line 60, in <module>
+    raise RuntimeError(f"receipt payment summary: expected 2 matches, found {text.count(first_payment_sql)}")
+RuntimeError: receipt payment summary: expected 2 matches, found 1
